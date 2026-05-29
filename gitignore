@@ -1,0 +1,32 @@
+# Raw data — too large for GitHub (CSV is ~1.7GB)
+data/raw/
+*.csv
+*.csv.gz
+*.parquet
+
+# Python
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+.env
+venv/
+*.egg-info/
+
+# R
+.Rhistory
+.RData
+.Rproj.user/
+*.Rproj
+
+# STATA
+*.dta
+*.log
+*.smcl
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Output (optional — remove these lines if you want figures tracked)
+# output/figures/
+# output/tables/
