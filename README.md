@@ -100,26 +100,23 @@ The key insight: **loss severity is roughly constant across grades (45–51%)**.
 
 #### Diagnosing the coefficients
 
-Two coefficients in this project come out with a counterintuitive sign: interest rate in the default model, and loan grade in the loss model above (it reads negative, implying worse grades lose *less* — the opposite of the raw data, where loss rises from ~45% at grade A to ~51% at grade G). Rather than wave these away as "multicollinearity," it's worth pinning down exactly what causes each.
+The loss model has an oddity: the coefficient on grade comes out *negative*, implying worse grades lose less — the opposite of the raw data. The reason becomes obvious once you ask a simpler question: how much of loss severity does each variable explain *on its own*?
 
-The grade ↔ interest rate overlap shown above is the starting point. Adding the suspect variables to a grade-only loss regression one at a time shows precisely when grade's sign flips:
+| Variable (on its own) | Share of loss severity explained |
+|---|---|
+| **Months on book** | **67.7%** |
+| Revolving utilisation | 0.8% |
+| FICO score | 0.6% |
+| Loan term | 0.6% |
+| Interest rate | 0.5% |
+| Loan amount | 0.4% |
+| Loan grade | 0.1% |
+| Annual income | 0.0% |
+| Debt-to-income | 0.0% |
 
-| Model includes | Grade coefficient | Interest rate coefficient | R² |
-|---|---|---|---|
-| grade only | **+0.007** | — | 0.001 |
-| + interest rate | **−0.059** | +1.877 | 0.015 |
-| + FICO | −0.053 | +1.873 | 0.023 |
-| + term | −0.058 | +1.861 | 0.026 |
-| + months on book | −0.016 | −0.015 | **0.722** |
+One variable does essentially all the work. **Loss severity is almost entirely a question of *when* a loan fails:** default early and most of the principal is still outstanding; default late and the borrower has already repaid most of it. Grade, FICO, and the rest explain almost nothing by comparison — which is why grade's coefficient in the combined model is small and unstable enough to flip sign. It simply has very little real signal to contribute.
 
-Two things happen. First, the moment **interest rate** enters, grade flips from positive to sharply negative while interest rate jumps to +1.88 — the two are so collinear that the model arbitrarily hands the "worse loans lose more" signal to interest rate and leaves grade holding a negative residual. Second, when **months on book** enters, R² leaps from 0.03 to 0.72 — loan timing explains almost all loss severity — and interest rate's own effect collapses to near zero, becoming insignificant.
-
-So the two odd coefficients have genuinely different causes:
-
-- **Default model:** interest rate is simply redundant with grade. Dropping it cleans up the coefficients with no loss of predictive accuracy.
-- **Loss model:** loss severity is really driven by *when* a loan fails (months on book) — a loan that defaults late has already repaid most of its principal. Grade's effect runs *through* that timing rather than alongside it, so its leftover coefficient is not meaningful on its own.
-
-Two practical consequences follow. For any grade-level figure in this project (Expected Loss, buffer sizing, the dashboard), the **observed average loss by grade** is used rather than the regression coefficient, because the averages reflect the real relationship. And in the interactive dashboard, the interest rate control is deliberately **locked** to the grade by default — with an option to unlock it and a note explaining this exact caveat.
+In short: **grade tells you *whether* a borrower defaults; timing tells you *how much* is lost.** Because grade barely affects loss severity, its regression coefficient is unreliable — so wherever this project needs a loss figure per grade (Expected Loss, buffer sizing, the dashboard), it uses the actual average loss observed for each grade instead of the coefficient.
 
 ### 5. Putting it together — Expected Loss
 

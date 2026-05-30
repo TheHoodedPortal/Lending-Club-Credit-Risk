@@ -680,10 +680,62 @@ function drawSurvival() {
     svg += `<circle class="marker-dot" cx="${xs(m)}" cy="${ys(s)}" r="3.5"/>`;
   });
 
-  document.getElementById('survChart').innerHTML = svg;
+  // hover layer: guide line, sliding dot, floating label (hidden until hover)
+  svg += `<line id="hovLine" x1="0" y1="${padT}" x2="0" y2="${H-padB}" stroke="var(--ink)" stroke-width="1" opacity="0"/>`;
+  svg += `<circle id="hovDot" r="5" fill="var(--ink)" stroke="var(--card)" stroke-width="2" opacity="0"/>`;
+  svg += `<g id="hovLabel" opacity="0"><rect id="hovBg" rx="5" fill="var(--ink)"/><text id="hovTxt" fill="var(--paper)" font-family="var(--font-mono)" font-size="11" font-weight="500" text-anchor="middle"></text></g>`;
+  // transparent capture rectangle over the plot area
+  svg += `<rect id="hovCapture" x="${padL}" y="${padT}" width="${W-padL-padR}" height="${H-padT-padB}" fill="transparent" style="cursor:crosshair"/>`;
+
+  const chart = document.getElementById('survChart');
+  chart.innerHTML = svg;
   document.getElementById('surv12').textContent = (survivalAt(12,hr)*100).toFixed(0)+'%';
   document.getElementById('surv36').textContent = (survivalAt(36,hr)*100).toFixed(0)+'%';
   document.getElementById('surv60').textContent = (survivalAt(60,hr)*100).toFixed(0)+'%';
+
+  // wire up hover interaction
+  const capture = document.getElementById('hovCapture');
+  const hovLine = document.getElementById('hovLine');
+  const hovDot  = document.getElementById('hovDot');
+  const hovLabel= document.getElementById('hovLabel');
+  const hovBg   = document.getElementById('hovBg');
+  const hovTxt  = document.getElementById('hovTxt');
+
+  function showHover(evt) {
+    // convert mouse x to SVG coordinate
+    const rect = chart.getBoundingClientRect();
+    const svgX = ((evt.clientX - rect.left) / rect.width) * W;
+    // map to month, clamp to [0, maxT]
+    let month = Math.round(((svgX - padL) / (W - padL - padR)) * maxT);
+    month = Math.max(0, Math.min(maxT, month));
+    const s = survivalAt(month, hr);
+    const px = xs(month), py = ys(s);
+
+    hovLine.setAttribute('x1', px); hovLine.setAttribute('x2', px);
+    hovLine.setAttribute('opacity', '0.25');
+    hovDot.setAttribute('cx', px); hovDot.setAttribute('cy', py);
+    hovDot.setAttribute('opacity', '1');
+
+    const label = `${(s*100).toFixed(1)}%  ·  mo ${month}`;
+    hovTxt.textContent = label;
+    const tw = label.length * 6.4 + 16;
+    let lx = px, ly = py - 16;
+    if (ly < padT + 14) ly = py + 24;          // flip below if near top
+    lx = Math.max(padL + tw/2, Math.min(W - padR - tw/2, lx));  // keep on-canvas
+    hovBg.setAttribute('x', lx - tw/2); hovBg.setAttribute('y', ly - 13);
+    hovBg.setAttribute('width', tw);    hovBg.setAttribute('height', 19);
+    hovTxt.setAttribute('x', lx);       hovTxt.setAttribute('y', ly);
+    hovLabel.setAttribute('opacity', '1');
+  }
+  function hideHover() {
+    hovLine.setAttribute('opacity', '0');
+    hovDot.setAttribute('opacity', '0');
+    hovLabel.setAttribute('opacity', '0');
+  }
+  capture.addEventListener('mousemove', showHover);
+  capture.addEventListener('mouseleave', hideHover);
+  capture.addEventListener('touchmove', e => { showHover(e.touches[0]); e.preventDefault(); }, {passive:false});
+  capture.addEventListener('touchend', hideHover);
 }
 
 function update() {
