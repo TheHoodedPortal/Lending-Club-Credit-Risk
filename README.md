@@ -8,6 +8,20 @@ It is built in three languages — **Python** (complete), **R** (in progress), a
 
 ---
 
+## 🔴 Try the live risk scorer
+
+The models in this project are wrapped in an interactive dashboard. Adjust a hypothetical borrower's grade, credit score, income, and loan terms, and watch the risk outputs update live:
+
+**▶ [Open the interactive dashboard](https://thehoodedportal.github.io/Lending-Club-Credit-Risk/)**
+
+It runs entirely in the browser using the project's actual fitted model coefficients, and shows:
+
+- **Probability of default and loss given default** for any borrower profile, with a benchmark against the full portfolio
+- **A personal survival curve** showing how the borrower's risk plays out month by month (Cox model)
+- **A Monte Carlo buffer simulation** — 1,000 randomly drawn loans, run 500 times, to size the reserve a realistic portfolio would need
+
+---
+
 ## The question
 
 When a borrower misses payments for 90 days, the lender loses the cash flow they were counting on. A bank needs to know, in advance, how large a financial cushion to set aside for this. Set it too low and a downturn threatens solvency; set it too high and capital sits idle.
@@ -124,9 +138,18 @@ Because recovery rates are uncertain, a sensitivity table shows the buffer acros
 
 ---
 
+## 7. From analysis to tool: the interactive dashboard
+
+The final step turns the static models into something a lender could actually use. [`index.html`](index.html) is a self-contained dashboard (live [here](https://thehoodedportal.github.io/Lending-Club-Credit-Risk/)) that loads the project's fitted coefficients directly into the browser — no server, no install.
+
+A user sets a borrower's profile and immediately sees that borrower's probability of default, expected loss, and where they rank against the whole portfolio. A live survival curve shows *when* the risk materialises, and a Monte Carlo panel draws 1,000 random loans matching the real grade mix to estimate the reserve a realistic portfolio would need. It connects every stage of the project — PD, LGD, survival, and buffer — into one screen.
+
+---
+
 ## What's in this repository
 
 ```
+├── index.html            ← interactive risk dashboard (live demo)
 ├── data/
 │   ├── raw/              ← original CSV (not tracked — too large)
 │   └── processed/        ← cleaned data
