@@ -145,38 +145,19 @@ Because recovery rates are uncertain, a sensitivity table shows the buffer acros
 
 ---
 
-## Methodology
+## Method summary
 
-A technical summary of the modelling choices, specifications, and validation for each stage.
+| Phase | Method | Library |
+|---|---|---|
+| Data cleaning | Column selection, date parsing, feature engineering | `pandas`, `numpy` |
+| EDA | Distributions, correlation matrix, cohort analysis | `matplotlib`, `seaborn` |
+| Vintage analysis | Cohort curves by grade and year | `pandas`, `matplotlib` |
+| Stage 1 — PD | Logistic regression | `scikit-learn`, `statsmodels` |
+| Time-to-stoppage | Cox proportional hazards, Kaplan-Meier | `lifelines` |
+| Stage 2 — LGD | OLS regression | `statsmodels` |
+| Buffer sizing | Scenario analysis, sensitivity table | `numpy` |
 
-### Data preparation
-- Source: `accepted_2007_to_2018Q4.csv` (2,260,701 rows × 151 columns), reduced to 25 analytic variables.
-- Target: binary `delq90` flag, set to 1 for loan statuses `Default`, `Charged Off`, `Late (90-120 days)`, and the corresponding "does not meet credit policy" status.
-- Feature engineering: parsed `issue_d`/`last_pymnt_d` to datetime; derived `months_obs` (months on book) and `issue_quarter` cohort; computed FICO midpoint from `fico_range_low`/`high`; normalised `int_rate` and `revol_util` to decimals.
-- Final analytic sample: 2,258,957 rows after dropping records missing core model inputs (1,744 rows, <0.1%). Output stored as Parquet for downstream speed.
-
-### Exploratory analysis
-- Univariate distributions, grade-level delinquency rates, and a Pearson correlation matrix across ten core risk variables to assess multicollinearity prior to modelling.
-
-### Vintage / cohort analysis
-- Loans grouped by issue quarter; 90-day delinquency rates tracked by cohort and grade to surface time effects (2008 crisis) and maturation bias in recent cohorts.
-
-### Stage 1 — Probability of Default (PD)
-- **Model:** logistic regression (`scikit-learn`), L2-regularised, `max_iter=1000`.
-- **Features:** interest rate, DTI, FICO, loan amount, annual income, revolving utilisation, prior 2yr delinquencies, open accounts, public records, months on book, term, and numeric grade (A=1…G=7).
-- **Preprocessing:** features standardised (`StandardScaler`); coefficients reported on the standardised scale and converted to average marginal effects (percentage points) for interpretation.
-- **Validation:** out-of-time split — trained on loans issued ≤2017, tested on 2018 originations. Test **AUC = 0.716**.
-- **Survival extension:** Cox proportional hazards and Kaplan-Meier estimators (`lifelines`) on a 100k-loan sample, modelling time-to-stoppage with `months_obs` as duration and `delq90` as the event. Concordance = 0.677; PH assumption assessed via Schoenfeld residuals.
-
-### Stage 2 — Loss Given Default (LGD)
-- **Model:** OLS regression (`statsmodels`) on the subset of defaulted loans (n = 269,103).
-- **Target:** `lgd = (loan_amnt − total_pymnt) / loan_amnt`, clipped to [0, 1].
-- **Result:** R² = 0.724. Coefficients reported with heteroskedasticity-aware caveats; significance assessed at p < 0.05. Multicollinearity (grade ↔ interest rate, r = −0.42) noted and flagged via condition number.
-
-### Expected Loss & buffer sizing
-- **Expected Loss** computed per grade as `PD × LGD × Exposure`, aggregated to a portfolio total.
-- **Buffer** modelled as expected 90-day cash-flow shortfall (`monthly installment × delinquency rate × 3 months`), then stress-tested across delinquency scenarios (base, +25%, +50%, and the observed 2007 peak of 35%).
-- **Sensitivity:** two-way grid over delinquency rate (5–35%) and recovery rate (0–60%) to bound the estimate rather than report a single point.
+**In plain terms:** `pandas` and `numpy` did the heavy lifting of loading 2.26M loans and reshaping the raw data into clean, model-ready variables. `matplotlib` and `seaborn` produced every chart in this README. The Stage 1 default model was built with `scikit-learn` (for the prediction and accuracy scoring) and `statsmodels` (for the regression coefficients and significance tests). `lifelines` handled the survival analysis — measuring not just *whether* a loan defaults but *how quickly*. The Stage 2 loss model used `statsmodels` for a standard regression. The final buffer figures were straightforward arithmetic on the model outputs, handled in `numpy`.
 
 ---
 
