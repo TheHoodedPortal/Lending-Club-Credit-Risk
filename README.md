@@ -1,175 +1,183 @@
 # Lending Club Credit Risk Analysis
 
-A quantitative credit risk project analysing 10 years of Lending Club loan data (2007–2018) to identify predictors of 90-day payment stoppages and estimate the cash-flow buffer required to absorb interruptions.
+**Estimating the cash-flow buffer a lender needs to absorb loan delinquencies.**
 
-Built in three languages — **Python** (complete), **R** (in progress), and **STATA** (in progress) — to demonstrate cross-platform analytical capability.
+This project analyses 2.26 million loans issued between 2007 and 2018 to answer one practical question: *when borrowers stop paying, how much money should a lender hold in reserve to stay solvent?*
+
+It is built in three languages — **Python** (complete), **R** (in progress), and **STATA** (in progress) — each producing the same analysis independently.
 
 ---
 
-## Key findings
+## The question
 
-| Metric | Value |
+When a borrower misses payments for 90 days, the lender loses the cash flow they were counting on. A bank needs to know, in advance, how large a financial cushion to set aside for this. Set it too low and a downturn threatens solvency; set it too high and capital sits idle.
+
+This project builds a statistically grounded answer in three steps:
+
+1. **How likely is a borrower to default?** (Probability of Default)
+2. **If they default, how much is actually lost?** (Loss Given Default)
+3. **Combining the two, how big should the buffer be — including under a crisis?**
+
+---
+
+## Headline results
+
+| Question | Answer |
 |---|---|
-| Portfolio size | 2,258,957 loans |
-| Overall 90-day delinquency rate | 11.92% |
-| Worst cohort | 2007 Q4 (Grade G: 48.6%) |
-| Stage 1 — Logistic regression AUC | 0.716 |
-| Stage 2 — LGD OLS R-squared | 0.724 |
-| Cox model concordance | 0.677 |
-| Mean Loss Given Default | 46.7% |
-| Total Expected Loss (PD × LGD × Exposure) | $1,970M |
-| Base buffer requirement | $360M (35.8% of monthly CF) |
-| Severe stress buffer (2007 peak) | $1,057M (105% of monthly CF) |
+| What share of loans go 90 days delinquent? | **11.9%** |
+| When a loan defaults, what fraction is lost? | **46.7%** on average |
+| Total expected loss across the portfolio | **$1.97 billion** |
+| Buffer needed under normal conditions | **$360M** (36% of one month's cash flow) |
+| Buffer needed in a 2008-style crisis | **$1.06B** (105% of one month's cash flow) |
+
+The single most important finding: **a severe downturn would require holding more than an entire month of portfolio cash flow in reserve** — nearly three times the normal-conditions buffer.
 
 ---
 
-## Project goal
+## How the analysis flows
 
-Lenders need a statistically defensible method for sizing the liquidity buffer required when borrowers enter 90-day delinquency. This project implements the industry-standard two-stage credit risk framework:
+The project moves from understanding the data, to modelling risk, to sizing the buffer. Each stage builds on the last.
 
-**Stage 1 — Probability of Default (PD):** Logistic regression predicting whether a loan will enter 90-day delinquency.
+### 1. Understanding the loans
 
-**Stage 2 — Loss Given Default (LGD):** OLS regression estimating what fraction of the loan amount is lost once default occurs.
+The first step is exploring who borrows and how loans are graded. Lending Club assigns each loan a grade from A (safest) to G (riskiest), and that grade turns out to be the strongest single signal of risk.
 
-**Expected Loss = PD × LGD × Exposure**
+**Delinquency rises steeply with grade** — from 3.3% for Grade A loans to 38.1% for Grade G.
 
-This is the foundation of Basel III credit risk frameworks used by all regulated banks.
+![Delinquency rate by loan grade](output/figures/delinquency_by_grade.png)
 
----
+The risk variables also relate to each other in sensible ways. For example, borrowers with higher credit scores get lower interest rates, and higher credit utilisation goes hand in hand with lower scores.
 
-## Data
+![Relationships between risk variables](output/figures/correlation_heatmap.png)
 
-**Source:** [Lending Club Loan Data — Kaggle](https://www.kaggle.com/datasets/wordsforthewise/lending-club)
+### 2. Tracking loans over time (vintage analysis)
 
-- `accepted_2007_to_2018Q4.csv` (~2.26M rows, 151 columns)
-- Raw data is excluded from this repo (see `.gitignore`)
+Grouping loans by the quarter they were issued reveals how different "vintages" performed. The 2007–2008 financial crisis is clearly visible, and recent loans appear artificially safe simply because they haven't had time to go bad yet (a known effect called *maturation bias*).
 
----
+![Delinquency by issue cohort and grade](output/figures/vintage_curves_by_grade.png)
 
-## Results
+### 3. Stage 1 — How likely is default?
 
-### Delinquency by grade
-Clear risk ladder from 3.3% (Grade A) to 38.1% (Grade G).
+A logistic regression model predicts whether each loan will become 90 days delinquent. The model correctly ranks risk about 72% of the time (AUC = 0.716), which is solid for consumer credit.
 
-![Delinquency by grade](output/figures/delinquency_by_grade.png)
+More useful than the accuracy is *what the model learned*. Loan grade is the dominant risk driver; longer-tenured loans and higher-income borrowers are the safest.
 
-### Vintage curves
-Delinquency rates by issue cohort and grade. Notable: 2007–2008 financial crisis spike, gradual F/G deterioration through 2015–2016, maturation bias in 2017–2018 cohorts.
+![What drives a borrower to default](output/figures/logistic_coefficients.png)
 
-![Vintage curves](output/figures/vintage_curves_by_grade.png)
+The model shifts genuine defaulters toward higher predicted probabilities, though the two groups overlap — many defaults are triggered by life events (job loss, illness) that no dataset can capture.
 
-### Stage 1 — Probability of Default
+![Model separation of defaulters](output/figures/predicted_probability_dist.png)
 
-Logistic regression (AUC = 0.716) identifying key delinquency drivers.
+We also model *how quickly* loans fail using survival analysis. Grade A loans stay healthy for years; nearly half of Grade G loans have stopped paying within five years.
 
-![Logistic coefficients](output/figures/logistic_coefficients.png)
+![Survival curves by grade](output/figures/kaplan_meier_by_grade.png)
 
-Grade is the dominant positive predictor. Months on book and annual income are the strongest protective factors.
+### 4. Stage 2 — How much is lost when default happens?
 
-![Predicted probability distribution](output/figures/predicted_probability_dist.png)
+Knowing a loan will default isn't enough — we need to know how much money is actually lost. A second regression model estimates this "loss given default" for each loan.
 
-### Survival analysis
-Kaplan-Meier curves show Grade A loans maintain 88% survival at 100 months vs Grade G dropping to 43% by month 60. Cox PH model concordance = 0.677.
+The key insight: **loss severity is roughly constant across grades (45–51%)**. In other words, a loan's grade tells you *whether* it will default, but not *how much* you'll lose if it does.
 
-![Kaplan-Meier curves](output/figures/kaplan_meier_by_grade.png)
+![What determines loss severity](output/figures/lgd_coefficients.png)
 
-### Stage 2 — Loss Given Default (OLS regression)
+### 5. Putting it together — Expected Loss
 
-OLS regression on defaulted loans (R² = 0.724). Key finding: LGD is remarkably flat across grades (~45–51%), meaning **grade predicts whether you lose money, not how much**.
+Combining the two stages gives **Expected Loss = Probability of Default × Loss Given Default × Loan Exposure** — the standard framework regulated banks use under Basel III.
 
-![LGD coefficients](output/figures/lgd_coefficients.png)
-
-### Two-stage Expected Loss by grade
-
-| Grade | PD | LGD | Expected Loss |
+| Grade | Default probability | Loss if default | Expected loss |
 |---|---|---|---|
 | A | 3.3% | 45.1% | $94M |
 | B | 7.9% | 45.1% | $337M |
-| C | 13.2% | 46.9% | $605M |
+| C | 13.2% | 46.9% | **$605M** |
 | D | 18.9% | 47.3% | $455M |
 | E | 26.7% | 47.1% | $298M |
 | F | 34.9% | 47.9% | $134M |
 | G | 38.1% | 51.3% | $48M |
 | **Total** | | | **$1,970M** |
 
-Grade C drives the largest absolute loss despite not being the riskiest grade — purely due to portfolio concentration.
+A subtle but important result: **Grade C loans drive the largest absolute loss** ($605M) — not because they are the riskiest, but because there are so many of them. Concentration matters as much as risk rate.
 
-![Expected Loss by grade](output/figures/expected_loss_by_grade.png)
+![Two-stage Expected Loss by grade](output/figures/expected_loss_by_grade.png)
 
-### Buffer stress scenarios
+### 6. Sizing the buffer
 
-| Scenario | Delinquency rate | Buffer required | % of monthly CF |
+Finally, the buffer itself. Under normal conditions the portfolio needs roughly **$360M** — about 36% of a month's scheduled cash flow. But the buffer must survive bad years, not just average ones, so it is stress-tested against progressively worse delinquency rates.
+
+| Scenario | Delinquency rate | Buffer required | Share of monthly cash flow |
 |---|---|---|---|
-| Base (observed) | 11.9% | $360M | 35.8% |
-| Mild stress | 14.9% | $450M | 44.7% |
-| Moderate stress | 17.9% | $540M | 53.6% |
-| Severe (2007 peak) | 35.0% | $1,057M | 105.0% |
+| Normal (observed) | 11.9% | $360M | 36% |
+| Mild stress | 14.9% | $450M | 45% |
+| Moderate stress | 17.9% | $540M | 54% |
+| Severe (2007 crisis level) | 35.0% | $1,057M | 105% |
 
-![Buffer scenarios](output/figures/buffer_scenarios.png)
+![Buffer under stress scenarios](output/figures/buffer_scenarios.png)
 
-### Sensitivity analysis
-Buffer requirement across combinations of delinquency rate (5%–35%) and recovery rate (0%–60%).
+Because recovery rates are uncertain, a sensitivity table shows the buffer across every combination of delinquency and recovery assumptions — giving decision-makers a full picture rather than a single number.
 
-![Sensitivity heatmap](output/figures/buffer_sensitivity.png)
-
----
-
-## Methods
-
-| Phase | Method | Library |
-|---|---|---|
-| Data cleaning | Column selection, date parsing, feature engineering | `pandas`, `numpy` |
-| EDA | Distributions, correlation matrix, cohort analysis | `matplotlib`, `seaborn` |
-| Vintage analysis | Cohort curves by grade and year | `pandas`, `matplotlib` |
-| Stage 1 — PD | Logistic regression | `scikit-learn`, `statsmodels` |
-| Time-to-stoppage | Cox proportional hazards, Kaplan-Meier | `lifelines` |
-| Stage 2 — LGD | OLS regression | `statsmodels` |
-| Buffer sizing | Scenario analysis, sensitivity table | `numpy` |
+![Buffer sensitivity analysis](output/figures/buffer_sensitivity.png)
 
 ---
 
-## Repository structure
+## What's in this repository
 
 ```
 ├── data/
-│   ├── raw/              ← original CSV (gitignored)
-│   └── processed/        ← cleaned .parquet output
-├── python/
-│   ├── 00_ingest.py      ← load, clean, feature engineering
-│   ├── 01_eda.ipynb      ← exploratory analysis
-│   ├── 02_cohort.ipynb   ← vintage & cohort curves
-│   ├── 03_models.ipynb   ← Stage 1 PD, Stage 2 LGD, Cox survival
-│   ├── 04_buffer.ipynb   ← buffer estimation & stress testing
+│   ├── raw/              ← original CSV (not tracked — too large)
+│   └── processed/        ← cleaned data
+├── python/               ← complete analysis
+│   ├── 00_ingest.py      ← load and clean the data
+│   ├── 01_eda.ipynb      ← explore the loans
+│   ├── 02_cohort.ipynb   ← vintage analysis over time
+│   ├── 03_models.ipynb   ← Stage 1 (default) + Stage 2 (loss)
+│   ├── 04_buffer.ipynb   ← buffer sizing and stress tests
 │   └── requirements.txt
-├── r/                    ← in progress
-├── stata/                ← in progress
-├── output/
-│   └── figures/          ← all charts
+├── r/                    ← R implementation (in progress)
+├── stata/                ← STATA implementation (in progress)
+├── output/figures/       ← all charts
 └── README.md
 ```
 
 ---
 
-## Setup
+## Method summary
+
+| Step | What it answers | Technique |
+|---|---|---|
+| Data cleaning | — | Feature engineering, date parsing |
+| Exploration | Who borrows and how is risk graded? | Distributions, correlations |
+| Vintage analysis | How do loans age over time? | Cohort tracking |
+| Stage 1 (PD) | How likely is default? | Logistic regression |
+| Survival | How quickly do loans fail? | Cox proportional hazards |
+| Stage 2 (LGD) | How much is lost on default? | OLS regression |
+| Buffer | How much reserve is needed? | Scenario & sensitivity analysis |
+
+---
+
+## Running it yourself
 
 ```bash
 cd python
 pip install -r requirements.txt
 
-# Run ingestion first (from project root)
+# From the project root, build the cleaned dataset first
 python python/00_ingest.py
 
-# Open Jupyter for analysis notebooks
+# Then open the analysis notebooks
 jupyter notebook
 ```
 
-**Python 3.10+** recommended.
+Requires Python 3.10 or newer.
 
 ---
 
-## Limitations
+## Important caveats
 
-- Lending Club data represents unsecured consumer credit. Findings are directionally informative for commercial lending and lease portfolios but should be interpreted with that distinction in mind.
-- 2017–2018 cohorts show artificially low delinquency rates due to maturation bias.
-- Buffer estimates assume 90-day stoppages result in full loss of 3 months of scheduled cash flow. Recovery rates are modelled separately in the sensitivity analysis.
-- The multicollinearity between grade and interest rate (r = −0.42) means individual coefficients should be interpreted with caution.
+- **This is consumer credit data.** Lending Club loans are unsecured personal loans. The methodology transfers to commercial lending and leases, but the specific numbers would differ.
+- **Recent loans look deceptively safe.** Loans from 2017–2018 hadn't matured when the data was collected, so their delinquency rates understate true risk.
+- **Models simplify reality.** Default is partly driven by unpredictable life events, so even a good model leaves meaningful uncertainty — which is exactly why a buffer is needed.
+
+---
+
+## Data source
+
+[Lending Club Loan Data — Kaggle](https://www.kaggle.com/datasets/wordsforthewise/lending-club) · `accepted_2007_to_2018Q4.csv` (2.26M loans, 151 columns)
