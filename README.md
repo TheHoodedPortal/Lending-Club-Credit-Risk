@@ -10,15 +10,11 @@ It is built in three languages — **Python** (complete), **R** (in progress), a
 
 ## 🔴 Try the live risk scorer
 
-The models in this project are wrapped in an interactive dashboard. Adjust a hypothetical borrower's grade, credit score, income, and loan terms, and watch the risk outputs update live:
+The models below are wrapped in an interactive dashboard you can use right now — adjust a hypothetical borrower's profile and watch the risk outputs update live:
 
 **▶ [Open the interactive dashboard](https://thehoodedportal.github.io/Lending-Club-Credit-Risk/)**
 
-It runs entirely in the browser using the project's actual fitted model coefficients, and shows:
-
-- **Probability of default and loss given default** for any borrower profile, with a benchmark against the full portfolio
-- **A personal survival curve** showing how the borrower's risk plays out month by month (Cox model)
-- **A Monte Carlo buffer simulation** — 1,000 randomly drawn loans, run 500 times, to size the reserve a realistic portfolio would need
+It runs entirely in the browser on the project's own fitted coefficients. More detail in [section 7](#7-from-analysis-to-tool-the-interactive-dashboard).
 
 ---
 
@@ -50,7 +46,7 @@ The single most important finding: **a severe downturn would require holding mor
 
 ## How the analysis flows
 
-The project moves from understanding the data, to modelling risk, to sizing the buffer. Each stage builds on the last.
+The project moves from understanding the data, to modelling risk, to sizing the buffer, to wrapping it all in a usable tool. Each stage builds on the last.
 
 ### 1. Understanding the loans
 
@@ -72,25 +68,17 @@ Grouping loans by the quarter they were issued reveals how different "vintages" 
 
 ### 3. Stage 1 — How likely is default?
 
-A logistic regression model predicts whether each loan will become 90 days delinquent. The model correctly ranks risk about 72% of the time (AUC = 0.716), which is solid for consumer credit.
+A logistic regression model predicts whether each loan will become 90 days delinquent. It separates risk well (AUC = 0.72), which is solid for consumer credit.
 
-More useful than the accuracy is *what the model learned*. Each factor's effect is shown below in percentage points of default risk, with bars showing the 95% confidence interval. Loan grade dominates; longer-tenured loans and higher-income borrowers are the safest.
+More useful than the score is *what the model learned*. Each factor's effect is shown below in percentage points of default risk, with bars showing the 95% confidence interval. Loan grade dominates; longer-tenured loans and higher-income borrowers are the safest.
 
 ![What drives a borrower to default](output/figures/marginal_effects.png)
 
 #### What the model can and can't predict
 
-Loan grade dominates the model because it is Lending Club's own risk score — already built from credit history, income, and other underwriting data before a loan is issued. It therefore absorbs most of the predictive power of the individual variables, which is why interest rate shows a counterintuitive sign (it overlaps heavily with grade).
+Loan grade dominates because it is Lending Club's own risk score — already built from credit history, income, and other underwriting data before a loan is issued. It absorbs most of the predictive power of the individual variables. (This is also why interest rate shows a counterintuitive sign, dissected in the next section.)
 
-This overlap is easy to see directly. Interest rate and delinquency both rise in near-perfect lockstep with grade — because Lending Club *sets* the rate from the grade. The two charts below have the same shape because they are, statistically, carrying the same information:
-
-| Delinquency rises with grade | Interest rate rises with grade |
-|---|---|
-| ![Delinquency by grade](output/figures/delinquency_by_grade.png) | ![Interest rate by grade](output/figures/interest_rate_by_grade.png) |
-
-When two variables move together this tightly, a model can't tell their effects apart, and their individual coefficients become unreliable (this is *multicollinearity*). It's the reason interest rate's coefficient flips negative in the default model, and the same reason grade's coefficient misbehaves in the loss model later. In the interactive dashboard, the interest rate control is deliberately *locked* to the grade by default for exactly this reason — with an option to unlock it and a note explaining the caveat.
-
-The honest takeaway is that **consumer default is only partly predictable**. The strongest triggers — job loss, illness, divorce — are life events that no loan dataset contains. An accuracy of ~72% is close to the practical ceiling for consumer credit models. This unpredictability is not a flaw in the analysis; it is the central reason a buffer is needed at all. If defaults were perfectly predictable, a lender could price them in precisely and hold no reserve. Because they are not, a cushion sized for uncertainty is essential — which is exactly what the rest of this project quantifies.
+The honest takeaway is that **consumer default is only partly predictable**. The strongest triggers — job loss, illness, divorce — are life events that no loan dataset contains, which is why an AUC around 0.72 is close to the practical ceiling for consumer credit. This is not a flaw in the analysis; it is the central reason a buffer is needed at all. If defaults were perfectly predictable, a lender could price them in precisely and hold no reserve. Because they are not, a cushion sized for uncertainty is essential — which is exactly what the rest of this project quantifies.
 
 We also model *how quickly* loans fail using survival analysis. Grade A loans stay healthy for years; nearly half of Grade G loans have stopped paying within five years.
 
@@ -108,7 +96,11 @@ The key insight: **loss severity is roughly constant across grades (45–51%)**.
 
 Two coefficients in this project come out with a counterintuitive sign: interest rate in the default model, and loan grade in the loss model above (it reads negative, implying worse grades lose *less* — the opposite of the raw data, where loss rises from ~45% at grade A to ~51% at grade G). Rather than wave these away as "multicollinearity," it's worth pinning down exactly what causes each.
 
-For the loss model, adding the suspect variables to the grade-only regression one at a time shows precisely when grade's sign flips:
+The root of it is that interest rate and grade carry almost the same information — Lending Club *sets* the rate from the grade, so the two rise in near-perfect lockstep:
+
+![Interest rate by grade](output/figures/interest_rate_by_grade.png)
+
+This is the same staircase shape as the delinquency-by-grade chart shown earlier. When two predictors move together this tightly, a model can't separate their individual effects. Adding the suspect variables to a grade-only loss regression one at a time shows precisely when grade's sign flips:
 
 | Model includes | Grade coefficient | Interest rate coefficient | R² |
 |---|---|---|---|
@@ -118,14 +110,14 @@ For the loss model, adding the suspect variables to the grade-only regression on
 | + term | −0.058 | +1.861 | 0.026 |
 | + months on book | −0.016 | −0.015 | **0.722** |
 
-Two things happen here. First, the moment **interest rate** enters, grade flips from positive to sharply negative while interest rate jumps to +1.88 — the two are so collinear (the lender sets rate from grade) that the model arbitrarily hands the "worse loans lose more" signal to interest rate and leaves grade holding a negative residual. Second, when **months on book** enters, R² leaps from 0.03 to 0.72 — loan timing explains almost all loss severity — and interest rate's own effect collapses to near zero, becoming insignificant.
+Two things happen. First, the moment **interest rate** enters, grade flips from positive to sharply negative while interest rate jumps to +1.88 — the two are so collinear that the model arbitrarily hands the "worse loans lose more" signal to interest rate and leaves grade holding a negative residual. Second, when **months on book** enters, R² leaps from 0.03 to 0.72 — loan timing explains almost all loss severity — and interest rate's own effect collapses to near zero, becoming insignificant.
 
 So the two odd coefficients have genuinely different causes:
 
 - **Default model:** interest rate is simply redundant with grade. Dropping it cleans up the coefficients with no loss of predictive accuracy.
 - **Loss model:** loss severity is really driven by *when* a loan fails (months on book) — a loan that defaults late has already repaid most of its principal. Grade's effect runs *through* that timing rather than alongside it, so its leftover coefficient is not meaningful on its own.
 
-The practical consequence: for any grade-level figure in this project (Expected Loss, buffer sizing, the dashboard), the **observed average loss by grade** is used rather than the regression coefficient, because the averages reflect the real relationship while the coefficient is distorted by the entanglement above.
+Two practical consequences follow. For any grade-level figure in this project (Expected Loss, buffer sizing, the dashboard), the **observed average loss by grade** is used rather than the regression coefficient, because the averages reflect the real relationship. And in the interactive dashboard, the interest rate control is deliberately **locked** to the grade by default — with an option to unlock it and a note explaining this exact caveat.
 
 ### 5. Putting it together — Expected Loss
 
@@ -165,11 +157,11 @@ Because recovery rates are uncertain, a sensitivity table shows the buffer acros
 
 ---
 
-## 7. From analysis to tool: the interactive dashboard
+### 7. From analysis to tool: the interactive dashboard
 
-The final step turns the static models into something a lender could actually use. [`index.html`](index.html) is a self-contained dashboard (live [here](https://thehoodedportal.github.io/Lending-Club-Credit-Risk/)) that loads the project's fitted coefficients directly into the browser — no server, no install.
+The final step turns the static models into something a lender could actually use. [`index.html`](index.html) is a self-contained dashboard ([live here](https://thehoodedportal.github.io/Lending-Club-Credit-Risk/)) that loads the project's fitted coefficients directly into the browser — no server, no install.
 
-A user sets a borrower's profile and immediately sees that borrower's probability of default, expected loss, and where they rank against the whole portfolio. A live survival curve shows *when* the risk materialises, and a Monte Carlo panel draws 1,000 random loans matching the real grade mix to estimate the reserve a realistic portfolio would need. It connects every stage of the project — PD, LGD, survival, and buffer — into one screen.
+Set a borrower's profile and you immediately see their probability of default, expected loss, and where they rank against the whole portfolio. A live survival curve shows *when* the risk materialises, and a Monte Carlo panel draws 1,000 random loans matching the real grade mix to estimate the reserve such a portfolio would need. It pulls every stage of the project — PD, LGD, survival, and buffer — into one screen.
 
 ---
 
