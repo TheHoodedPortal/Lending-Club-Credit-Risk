@@ -76,7 +76,15 @@ More useful than the score is *what the model learned*. Each factor's effect is 
 
 #### What the model can and can't predict
 
-Loan grade dominates because it is Lending Club's own risk score — already built from credit history, income, and other underwriting data before a loan is issued. It absorbs most of the predictive power of the individual variables. (This is also why interest rate shows a counterintuitive sign, dissected in the next section.)
+Loan grade dominates because it is Lending Club's own risk score — already built from credit history, income, and other underwriting data before a loan is issued. It absorbs most of the predictive power of the individual variables.
+
+The reason is that interest rate and grade carry almost the same information — Lending Club *sets* the rate from the grade, so the two rise in near-perfect lockstep:
+
+| Delinquency rises with grade | Interest rate rises with grade |
+|---|---|
+| ![Delinquency by grade](output/figures/delinquency_by_grade.png) | ![Interest rate by grade](output/figures/interest_rate_by_grade.png) |
+
+The two charts have the same staircase shape because they are, statistically, carrying the same signal. When two predictors move together this tightly, a model can't cleanly separate their effects — which is why interest rate shows a counterintuitive sign, dissected in the loss model below.
 
 The honest takeaway is that **consumer default is only partly predictable**. The strongest triggers — job loss, illness, divorce — are life events that no loan dataset contains, which is why an AUC around 0.72 is close to the practical ceiling for consumer credit. This is not a flaw in the analysis; it is the central reason a buffer is needed at all. If defaults were perfectly predictable, a lender could price them in precisely and hold no reserve. Because they are not, a cushion sized for uncertainty is essential — which is exactly what the rest of this project quantifies.
 
@@ -96,11 +104,7 @@ The key insight: **loss severity is roughly constant across grades (45–51%)**.
 
 Two coefficients in this project come out with a counterintuitive sign: interest rate in the default model, and loan grade in the loss model above (it reads negative, implying worse grades lose *less* — the opposite of the raw data, where loss rises from ~45% at grade A to ~51% at grade G). Rather than wave these away as "multicollinearity," it's worth pinning down exactly what causes each.
 
-The root of it is that interest rate and grade carry almost the same information — Lending Club *sets* the rate from the grade, so the two rise in near-perfect lockstep:
-
-![Interest rate by grade](output/figures/interest_rate_by_grade.png)
-
-This is the same staircase shape as the delinquency-by-grade chart shown earlier. When two predictors move together this tightly, a model can't separate their individual effects. Adding the suspect variables to a grade-only loss regression one at a time shows precisely when grade's sign flips:
+The grade ↔ interest rate overlap shown above is the starting point. Adding the suspect variables to a grade-only loss regression one at a time shows precisely when grade's sign flips:
 
 | Model includes | Grade coefficient | Interest rate coefficient | R² |
 |---|---|---|---|
