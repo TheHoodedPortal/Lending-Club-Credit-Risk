@@ -76,17 +76,15 @@ More useful than the score is *what the model learned*. Each factor's effect is 
 
 #### What the model can and can't predict
 
-Loan grade dominates because it is Lending Club's own risk score — already built from credit history, income, and other underwriting data before a loan is issued. It absorbs most of the predictive power of the individual variables.
-
-The reason is that interest rate and grade carry almost the same information — Lending Club *sets* the rate from the grade, so the two rise in near-perfect lockstep:
+Loan grade is by far the strongest signal — unsurprising, since it is Lending Club's own risk score, already distilled from credit history and income before a loan is issued. It overlaps so heavily with interest rate (the rate is *set* from the grade) that the two rise in near-perfect lockstep:
 
 | Delinquency rises with grade | Interest rate rises with grade |
 |---|---|
 | ![Delinquency by grade](output/figures/delinquency_by_grade.png) | ![Interest rate by grade](output/figures/interest_rate_by_grade.png) |
 
-The two charts have the same staircase shape because they are, statistically, carrying the same signal. When two predictors move together this tightly, a model can't cleanly separate their effects — which is why interest rate shows a counterintuitive sign, dissected in the loss model below.
+That tight overlap is what makes interest rate's coefficient behave strangely — a problem dissected in the next section.
 
-The honest takeaway is that **consumer default is only partly predictable**. The strongest triggers — job loss, illness, divorce — are life events that no loan dataset contains, which is why an AUC around 0.72 is close to the practical ceiling for consumer credit. This is not a flaw in the analysis; it is the central reason a buffer is needed at all. If defaults were perfectly predictable, a lender could price them in precisely and hold no reserve. Because they are not, a cushion sized for uncertainty is essential — which is exactly what the rest of this project quantifies.
+But the bigger point is the ceiling: at AUC ≈ 0.72, **consumer default is only partly predictable, and that's expected.** The strongest triggers — job loss, illness, divorce — are life events no loan dataset contains. This isn't a weakness in the model; it's the whole reason a buffer exists. If default were perfectly predictable a lender could price it in exactly and hold no reserve. Because it isn't, a cushion sized for the uncertainty is essential — which is what the rest of this project quantifies.
 
 We also model *how quickly* loans fail using survival analysis. Grade A loans stay healthy for years; nearly half of Grade G loans have stopped paying within five years.
 
