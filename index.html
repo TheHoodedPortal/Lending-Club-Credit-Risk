@@ -85,6 +85,33 @@
     width: 19px; height: 19px; border-radius: 50%;
     background: var(--accent); cursor: pointer; border: 3px solid var(--card);
   }
+  input[type=range]:disabled { opacity: 0.5; cursor: not-allowed; }
+  input[type=range]:disabled::-webkit-slider-thumb { background: var(--muted); box-shadow: 0 0 0 1px var(--muted); cursor: not-allowed; }
+  input[type=range]:disabled::-moz-range-thumb { background: var(--muted); }
+
+  .lock-btn {
+    background: none; border: none; cursor: pointer; padding: 0 0 0 6px;
+    position: relative; color: var(--muted); vertical-align: middle;
+    line-height: 1; display: inline-flex; align-items: center;
+  }
+  .lock-btn:hover { color: var(--accent); }
+  .lock-btn.unlocked { color: var(--amber); }
+  .tooltip {
+    position: absolute; left: 0; bottom: 150%;
+    width: 230px; background: var(--ink); color: var(--paper);
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 11px; font-weight: 400; line-height: 1.45;
+    text-transform: none; letter-spacing: 0;
+    padding: 9px 11px; border-radius: 7px;
+    opacity: 0; visibility: hidden; transition: opacity 0.15s;
+    z-index: 20; pointer-events: none;
+    box-shadow: 0 5px 16px rgba(0,0,0,0.2);
+  }
+  .tooltip::after {
+    content: ''; position: absolute; top: 100%; left: 12px;
+    border: 5px solid transparent; border-top-color: var(--ink);
+  }
+  .lock-btn:hover .tooltip { opacity: 1; visibility: visible; }
   .grade-row { display: flex; gap: 6px; }
   .grade-btn {
     flex: 1; padding: 9px 0; border: 1px solid var(--line);
@@ -197,8 +224,11 @@
       </div>
 
       <div class="field">
-        <div class="field-head"><label>Interest rate</label><span class="val" id="intRateVal">14.0%</span></div>
-        <input type="range" id="intRate" min="5" max="31" step="0.1" value="14">
+        <div class="field-head">
+          <label>Interest rate<button class="lock-btn" id="rateLock" aria-label="Toggle interest rate lock"><span id="lockIcon"></span><span class="tooltip" id="rateTip"></span></button></label>
+          <span class="val" id="intRateVal">14.0%</span>
+        </div>
+        <input type="range" id="intRate" min="5" max="31" step="0.1" value="14" disabled>
       </div>
 
       <div class="field">
@@ -454,6 +484,7 @@ function drawBuffer(losses, mean, p95) {
 }
 
 document.getElementById('bufBtn').onclick = runBufferSim;
+document.getElementById('rateLock').onclick = () => setRateLock(!rateLocked);
 
 // PD percentiles across all 2.26M loans (0,5,...,100) — for the benchmark
 const PD_PCT = [0.0000,0.0276,0.0388,0.0487,0.0588,0.0689,0.0796,0.0912,
@@ -482,6 +513,27 @@ let state = {
   loan_amnt: 15000, dti: 18, revol_util: 52, term: 36
 };
 
+// Interest rate lock — rate follows grade unless the user unlocks it
+let rateLocked = true;
+const LOCK_SVG = '<svg width="12" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>';
+const UNLOCK_SVG = '<svg width="12" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0"/></svg>';
+const TIP_LOCKED = 'Locked: interest rate follows the loan grade. Lenders set the rate from the grade, so the two carry the same information and move together. Click to set the rate manually.';
+const TIP_UNLOCKED = 'Unlocked: you can set the rate independently. Because rate and grade overlap so heavily, the model can behave counterintuitively when they disagree. Click to re-lock to the grade.';
+
+function setRateLock(locked) {
+  rateLocked = locked;
+  const slider = document.getElementById('intRate');
+  slider.disabled = locked;
+  document.getElementById('lockIcon').innerHTML = locked ? LOCK_SVG : UNLOCK_SVG;
+  document.getElementById('rateTip').textContent = locked ? TIP_LOCKED : TIP_UNLOCKED;
+  document.getElementById('rateLock').classList.toggle('unlocked', !locked);
+  if (locked) {
+    state.int_rate = GRADE_RATE[state.grade_num];
+    slider.value = state.int_rate;
+    update();
+  }
+}
+
 // Build grade buttons
 const gradeRow = document.getElementById('gradeRow');
 for (let g = 1; g <= 7; g++) {
@@ -493,9 +545,11 @@ for (let g = 1; g <= 7; g++) {
     state.grade_num = g;
     document.querySelectorAll('.grade-btn').forEach(x => x.classList.remove('active'));
     b.classList.add('active');
-    // auto-set a typical rate for the grade
-    state.int_rate = GRADE_RATE[g];
-    document.getElementById('intRate').value = GRADE_RATE[g];
+    // rate follows grade only when locked
+    if (rateLocked) {
+      state.int_rate = GRADE_RATE[g];
+      document.getElementById('intRate').value = GRADE_RATE[g];
+    }
     update();
   };
   gradeRow.appendChild(b);
@@ -683,6 +737,7 @@ function update() {
   drawSurvival();
 }
 
+setRateLock(true);
 update();
 runBufferSim();
 </script>
