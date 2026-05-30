@@ -78,10 +78,6 @@ More useful than the accuracy is *what the model learned*. Each factor's effect 
 
 ![What drives a borrower to default](output/figures/marginal_effects.png)
 
-The model shifts genuine defaulters toward higher predicted probabilities, though the two groups overlap — many defaults are triggered by life events (job loss, illness) that no dataset can capture.
-
-![Model separation of defaulters](output/figures/predicted_probability_dist.png)
-
 #### What the model can and can't predict
 
 Loan grade dominates the model because it is Lending Club's own risk score — already built from credit history, income, and other underwriting data before a loan is issued. It therefore absorbs most of the predictive power of the individual variables, which is why interest rate shows a counterintuitive sign (it overlaps heavily with grade).
@@ -108,7 +104,28 @@ The key insight: **loss severity is roughly constant across grades (45–51%)**.
 
 ![What determines loss severity](output/figures/lgd_coefficients.png)
 
-> **A note on reading this model.** The regression's coefficient on loan grade comes out *negative* — implying worse grades lose less, which contradicts the raw data (where loss severity rises slightly from ~45% at grade A to ~51% at grade G). This sign flip is a multicollinearity artifact: grade is tightly correlated with interest rate, term, and loan age, so its isolated effect in the combined model doesn't match the real-world relationship. The model's accuracy is carried mainly by loan age — loans that default later have already repaid more principal, so less is lost. For this reason, every grade-level figure in this project (Expected Loss, buffer sizing, the dashboard) uses the **observed average loss by grade** rather than this coefficient. Catching and correctly handling this is itself part of the analysis.
+#### Diagnosing the coefficients
+
+Two coefficients in this project come out with a counterintuitive sign: interest rate in the default model, and loan grade in the loss model above (it reads negative, implying worse grades lose *less* — the opposite of the raw data, where loss rises from ~45% at grade A to ~51% at grade G). Rather than wave these away as "multicollinearity," it's worth pinning down exactly what causes each.
+
+For the loss model, adding the suspect variables to the grade-only regression one at a time shows precisely when grade's sign flips:
+
+| Model includes | Grade coefficient | Interest rate coefficient | R² |
+|---|---|---|---|
+| grade only | **+0.007** | — | 0.001 |
+| + interest rate | **−0.059** | +1.877 | 0.015 |
+| + FICO | −0.053 | +1.873 | 0.023 |
+| + term | −0.058 | +1.861 | 0.026 |
+| + months on book | −0.016 | −0.015 | **0.722** |
+
+Two things happen here. First, the moment **interest rate** enters, grade flips from positive to sharply negative while interest rate jumps to +1.88 — the two are so collinear (the lender sets rate from grade) that the model arbitrarily hands the "worse loans lose more" signal to interest rate and leaves grade holding a negative residual. Second, when **months on book** enters, R² leaps from 0.03 to 0.72 — loan timing explains almost all loss severity — and interest rate's own effect collapses to near zero, becoming insignificant.
+
+So the two odd coefficients have genuinely different causes:
+
+- **Default model:** interest rate is simply redundant with grade. Dropping it cleans up the coefficients with no loss of predictive accuracy.
+- **Loss model:** loss severity is really driven by *when* a loan fails (months on book) — a loan that defaults late has already repaid most of its principal. Grade's effect runs *through* that timing rather than alongside it, so its leftover coefficient is not meaningful on its own.
+
+The practical consequence: for any grade-level figure in this project (Expected Loss, buffer sizing, the dashboard), the **observed average loss by grade** is used rather than the regression coefficient, because the averages reflect the real relationship while the coefficient is distorted by the entanglement above.
 
 ### 5. Putting it together — Expected Loss
 
