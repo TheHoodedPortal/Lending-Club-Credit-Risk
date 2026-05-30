@@ -262,7 +262,7 @@
           <span class="metric-val" id="lgdVal">—</span>
         </div>
         <div class="bar-track"><div class="bar-fill" id="lgdBar" style="width:0%"></div></div>
-        <div class="metric-desc">Fraction of the loan lost if default occurs · Stage 2 OLS model</div>
+        <div class="metric-desc">Fraction of the loan lost if default occurs · observed average by grade</div>
       </div>
 
       <div class="el-box">
@@ -546,10 +546,12 @@ function compute() {
   }
   const pd = sigmoid(z);
 
-  // Stage 2: OLS on raw values
-  let lgd = OLS.intercept;
-  for (const k in OLS.coef) lgd += OLS.coef[k] * raw[k];
-  lgd = Math.max(0, Math.min(1, lgd));
+  // Stage 2: Loss Given Default — anchored on observed grade-level averages.
+  // The multivariate OLS produced a counterintuitive negative grade coefficient
+  // due to multicollinearity (grade ↔ rate/term/tenure); the observed averages
+  // are the faithful, data-grounded relationship used throughout the project.
+  const LGD_BY_GRADE = [0.4514,0.4513,0.4693,0.4729,0.4713,0.4792,0.5131];
+  let lgd = LGD_BY_GRADE[state.grade_num - 1];
 
   const el = pd * lgd * state.loan_amnt;
   return { pd, lgd, el };
