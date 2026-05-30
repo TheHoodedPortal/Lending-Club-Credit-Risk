@@ -60,13 +60,19 @@ Grouping loans by the quarter they were issued reveals how different "vintages" 
 
 A logistic regression model predicts whether each loan will become 90 days delinquent. The model correctly ranks risk about 72% of the time (AUC = 0.716), which is solid for consumer credit.
 
-More useful than the accuracy is *what the model learned*. Loan grade is the dominant risk driver; longer-tenured loans and higher-income borrowers are the safest.
+More useful than the accuracy is *what the model learned*. Each factor's effect is shown below in percentage points of default risk, with bars showing the 95% confidence interval. Loan grade dominates; longer-tenured loans and higher-income borrowers are the safest.
 
-![What drives a borrower to default](output/figures/logistic_coefficients.png)
+![What drives a borrower to default](output/figures/marginal_effects.png)
 
 The model shifts genuine defaulters toward higher predicted probabilities, though the two groups overlap — many defaults are triggered by life events (job loss, illness) that no dataset can capture.
 
 ![Model separation of defaulters](output/figures/predicted_probability_dist.png)
+
+#### What the model can and can't predict
+
+Loan grade dominates the model because it is Lending Club's own risk score — already built from credit history, income, and other underwriting data before a loan is issued. It therefore absorbs most of the predictive power of the individual variables, which is why interest rate shows a counterintuitive sign (it overlaps heavily with grade).
+
+The honest takeaway is that **consumer default is only partly predictable**. The strongest triggers — job loss, illness, divorce — are life events that no loan dataset contains. An accuracy of ~72% is close to the practical ceiling for consumer credit models. This unpredictability is not a flaw in the analysis; it is the central reason a buffer is needed at all. If defaults were perfectly predictable, a lender could price them in precisely and hold no reserve. Because they are not, a cushion sized for uncertainty is essential — which is exactly what the rest of this project quantifies.
 
 We also model *how quickly* loans fail using survival analysis. Grade A loans stay healthy for years; nearly half of Grade G loans have stopped paying within five years.
 
