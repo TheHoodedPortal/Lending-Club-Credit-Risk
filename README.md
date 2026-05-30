@@ -86,6 +86,14 @@ The model shifts genuine defaulters toward higher predicted probabilities, thoug
 
 Loan grade dominates the model because it is Lending Club's own risk score — already built from credit history, income, and other underwriting data before a loan is issued. It therefore absorbs most of the predictive power of the individual variables, which is why interest rate shows a counterintuitive sign (it overlaps heavily with grade).
 
+This overlap is easy to see directly. Interest rate and delinquency both rise in near-perfect lockstep with grade — because Lending Club *sets* the rate from the grade. The two charts below have the same shape because they are, statistically, carrying the same information:
+
+| Delinquency rises with grade | Interest rate rises with grade |
+|---|---|
+| ![Delinquency by grade](output/figures/delinquency_by_grade.png) | ![Interest rate by grade](output/figures/interest_rate_by_grade.png) |
+
+When two variables move together this tightly, a model can't tell their effects apart, and their individual coefficients become unreliable (this is *multicollinearity*). It's the reason interest rate's coefficient flips negative in the default model, and the same reason grade's coefficient misbehaves in the loss model later. In the interactive dashboard, the interest rate control is deliberately *locked* to the grade by default for exactly this reason — with an option to unlock it and a note explaining the caveat.
+
 The honest takeaway is that **consumer default is only partly predictable**. The strongest triggers — job loss, illness, divorce — are life events that no loan dataset contains. An accuracy of ~72% is close to the practical ceiling for consumer credit models. This unpredictability is not a flaw in the analysis; it is the central reason a buffer is needed at all. If defaults were perfectly predictable, a lender could price them in precisely and hold no reserve. Because they are not, a cushion sized for uncertainty is essential — which is exactly what the rest of this project quantifies.
 
 We also model *how quickly* loans fail using survival analysis. Grade A loans stay healthy for years; nearly half of Grade G loans have stopped paying within five years.
@@ -99,6 +107,8 @@ Knowing a loan will default isn't enough — we need to know how much money is a
 The key insight: **loss severity is roughly constant across grades (45–51%)**. In other words, a loan's grade tells you *whether* it will default, but not *how much* you'll lose if it does.
 
 ![What determines loss severity](output/figures/lgd_coefficients.png)
+
+> **A note on reading this model.** The regression's coefficient on loan grade comes out *negative* — implying worse grades lose less, which contradicts the raw data (where loss severity rises slightly from ~45% at grade A to ~51% at grade G). This sign flip is a multicollinearity artifact: grade is tightly correlated with interest rate, term, and loan age, so its isolated effect in the combined model doesn't match the real-world relationship. The model's accuracy is carried mainly by loan age — loans that default later have already repaid more principal, so less is lost. For this reason, every grade-level figure in this project (Expected Loss, buffer sizing, the dashboard) uses the **observed average loss by grade** rather than this coefficient. Catching and correctly handling this is itself part of the analysis.
 
 ### 5. Putting it together — Expected Loss
 
