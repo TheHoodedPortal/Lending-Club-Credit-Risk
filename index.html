@@ -131,11 +131,12 @@
 
   .el-box {
     margin-top: 22px; padding: 16px 18px; border-radius: 8px;
-    background: var(--ink); color: var(--paper);
+    background: var(--paper); color: var(--ink);
+    border: 1px solid var(--line);
   }
-  .el-box .el-label { font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; letter-spacing: 0.13em; text-transform: uppercase; opacity: 0.7; }
+  .el-box .el-label { font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; letter-spacing: 0.13em; text-transform: uppercase; color: var(--muted); }
   .el-box .el-val { font-family: 'Fraunces', serif; font-size: 30px; font-weight: 600; margin-top: 4px; }
-  .el-box .el-detail { font-size: 12px; opacity: 0.78; margin-top: 6px; }
+  .el-box .el-detail { font-size: 12px; color: var(--muted); margin-top: 6px; }
 
   .full { grid-column: 1 / -1; }
   .surv-head { display:flex; justify-content:space-between; align-items:baseline; flex-wrap:wrap; gap:10px; margin-bottom:4px; }
@@ -166,11 +167,11 @@
   .buf-card { background:var(--paper); border:1px solid var(--line); border-radius:8px; padding:14px 16px; }
   .buf-card .bc-lab { font-size:10.5px; text-transform:uppercase; letter-spacing:0.1em; color:var(--muted); }
   .buf-card .bc-num { font-family:'Fraunces',serif; font-weight:600; font-size:26px; margin-top:4px; }
-  .buf-card.accent { background:var(--ink); border-color:var(--ink); }
-  .buf-card.accent .bc-lab { color:rgba(244,241,234,0.7); }
-  .buf-card.accent .bc-num { color:var(--paper); }
+  .buf-card.accent { background:var(--paper); border-color:var(--line); }
+  .buf-card.accent .bc-lab { color:var(--muted); }
+  .buf-card.accent .bc-num { color:var(--ink); }
   .buf-card .bc-sub { font-size:11px; color:var(--muted); margin-top:3px; }
-  .buf-card.accent .bc-sub { color:rgba(244,241,234,0.65); }
+  .buf-card.accent .bc-sub { color:var(--muted); }
   #bufChart { width:100%; height:auto; }
   .histbar { fill:var(--accent-soft); }
   .mean-line { stroke:var(--amber); stroke-width:2; }
@@ -326,8 +327,8 @@
   </div>
 
   <footer>
-    Predictions use the actual fitted coefficients from this project's Stage 1 (logistic regression, standardised features) and Stage 2 (OLS) models. Selecting a grade auto-sets a typical interest rate, but you can override it.
-    <div class="disclaimer">For demonstration only. Trained on unsecured consumer loans (Lending Club, 2007–2018); not a substitute for a lender's own underwriting.</div>
+    Predictions use this project's fitted Stage 1 logistic model (standardised features) for probability of default and the observed average loss-given-default by grade for severity; the survival curve uses the Cox proportional-hazards fit. Selecting a grade auto-sets a typical interest rate, but you can override it.
+    <div class="disclaimer">For demonstration only. The Stage 2 severity (LGD) model is fitted using “months on book” — how long a loan has been active, a post-origination variable not known at application time — which is one reason the dashboard uses observed average loss by grade rather than that model's coefficients. Trained on unsecured consumer loans (Lending Club, 2007–2018); not a substitute for a lender's own underwriting.</div>
   </footer>
 </div>
 
@@ -357,17 +358,6 @@ const SCALER = {
   term:{m:42.80207230618057,s:10.815800834419292},
   grade_num:{m:2.7349911177967825,s:1.2690720883478936}
 };
-const OLS = {
-  intercept: 0.4408472275774321,
-  coef: {
-    int_rate:-0.008755863150658226, dti:-0.00013265983848327652,
-    fico:0.0003215723964031405, loan_amnt:3.6733600531097415e-8,
-    annual_inc:-1.9094533377856204e-9, revol_util:-0.012167347194655934,
-    grade_num:-0.016198256051911105, term:0.005108405894253067,
-    months_obs:-0.022027976004562404
-  }
-};
-
 // Cox proportional hazards — for the survival curve
 const COX = {
   coef: { int_rate:5.55991135465418, dti:0.001173940273411013,
@@ -558,8 +548,7 @@ function compute() {
   // The multivariate OLS produced a counterintuitive negative grade coefficient
   // due to multicollinearity (grade ↔ rate/term/tenure); the observed averages
   // are the faithful, data-grounded relationship used throughout the project.
-  const LGD_BY_GRADE = [0.4572,0.4538,0.4701,0.4743,0.4678,0.4739,0.5064];
-  let lgd = LGD_BY_GRADE[state.grade_num - 1];
+  let lgd = PORT.lgd[state.grade_num - 1];
 
   const el = pd * lgd * state.loan_amnt;
   return { pd, lgd, el };
