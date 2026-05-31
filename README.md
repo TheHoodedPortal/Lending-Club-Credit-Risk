@@ -4,7 +4,7 @@
 
 This project analyses 2.26 million loans issued between 2007 and 2018 to answer one practical question: *when borrowers stop paying, how much money should a lender hold in reserve to stay solvent?*
 
-It is built in three languages — **Python** (complete), **R** (in progress), and **STATA** (in progress) — each producing the same analysis independently.
+It is built in **Python** (complete), with **R** and **STATA** implementations planned to reproduce the same analysis independently.
 
 ---
 
@@ -52,7 +52,7 @@ The project moves from understanding the data, to modelling risk, to sizing the 
 
 The first step is exploring who borrows and how loans are graded. Lending Club assigns each loan a grade from A (safest) to G (riskiest), and that grade turns out to be the strongest single signal of risk.
 
-**Delinquency rises steeply with grade** — from 3.3% for Grade A loans to 38.1% for Grade G.
+**Delinquency rises steeply with grade** — from 3.6% for Grade A loans to 40.0% for Grade G.
 
 ![Delinquency rate by loan grade](output/figures/delinquency_by_grade.png)
 
@@ -70,7 +70,7 @@ Grouping loans by the quarter they were issued reveals how different "vintages" 
 
 A logistic regression model predicts whether each loan will become 90 days delinquent. It separates risk well (AUC = 0.68), which is solid for an application-time model — meaning it uses only information available at the point a loan is issued, with no look-ahead into future payment history.
 
-More useful than the score is *what the model learned*. Each factor's effect is shown below in percentage points of default risk, with bars showing the 95% confidence interval. Loan grade dominates; higher income and better credit scores are the strongest protective factors.
+More useful than the score is *what the model learned*. Each bar below shows how much a one-standard-deviation increase in a factor moves a borrower's default probability — in percentage points, with 95% confidence intervals — which puts every factor on a common footing. Loan grade dominates; higher income and a better credit score are the strongest protective factors.
 
 ![What drives a borrower to default](output/figures/marginal_effects.png)
 
@@ -104,12 +104,12 @@ The loss model has an oddity: the coefficient on grade comes out *negative*, imp
 
 | Variable (on its own) | Share of loss severity explained |
 |---|---|
-| **Months on book** | **68.8%** |
-| Revolving utilisation | 0.8% |
-| FICO score | 0.6% |
+| **Months on book** | **68.9%** |
+| Revolving utilisation | 0.9% |
+| FICO score | 0.8% |
 | Loan term | 0.6% |
-| Interest rate | 0.5% |
 | Loan amount | 0.4% |
+| Interest rate | 0.4% |
 | Loan grade | 0.1% |
 | Annual income | 0.0% |
 | Debt-to-income | 0.0% |
@@ -178,8 +178,8 @@ Set a borrower's profile and you immediately see their probability of default, e
 │   ├── 03_models.ipynb   ← Stage 1 (default) + Stage 2 (loss)
 │   ├── 04_buffer.ipynb   ← buffer sizing and stress tests
 │   └── requirements.txt
-├── r/                    ← R implementation (in progress)
-├── stata/                ← STATA implementation (in progress)
+├── r/                    ← R implementation (planned — not yet present)
+├── stata/                ← STATA implementation (planned — not yet present)
 ├── output/figures/       ← all charts
 └── README.md
 ```

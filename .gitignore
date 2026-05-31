@@ -1,5 +1,6 @@
 # Raw data — too large for GitHub (CSV is ~1.7GB)
 data/raw/
+data/processed/
 *.csv
 *.csv.gz
 *.parquet
@@ -26,7 +27,3 @@ venv/
 # OS
 .DS_Store
 Thumbs.db
-
-# Output (optional — remove these lines if you want figures tracked)
-# output/figures/
-# output/tables/
