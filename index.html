@@ -89,6 +89,30 @@
   input[type=range]:disabled::-webkit-slider-thumb { background: var(--muted); box-shadow: 0 0 0 1px var(--muted); cursor: not-allowed; }
   input[type=range]:disabled::-moz-range-thumb { background: var(--muted); }
 
+  .help {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 14px; height: 14px; margin-left: 6px; vertical-align: middle;
+    border-radius: 50%; background: var(--line); color: var(--card);
+    font-family: 'IBM Plex Mono', monospace; font-size: 10px; font-weight: 600;
+    cursor: help; position: relative; top: -1px;
+  }
+  .help:hover, .help:focus { background: var(--accent); outline: none; }
+  .tooltip {
+    position: absolute; left: 0; bottom: calc(100% + 8px);
+    width: 220px; background: var(--ink); color: var(--paper);
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 11px; font-weight: 400; line-height: 1.45;
+    text-transform: none; letter-spacing: 0;
+    padding: 9px 11px; border-radius: 7px;
+    opacity: 0; visibility: hidden; transition: opacity 0.15s;
+    z-index: 20; pointer-events: none;
+    box-shadow: 0 5px 16px rgba(0,0,0,0.2);
+  }
+  .tooltip::after {
+    content: ''; position: absolute; top: 100%; left: 5px;
+    border: 5px solid transparent; border-top-color: var(--ink);
+  }
+  .help:hover .tooltip, .help:focus .tooltip { opacity: 1; visibility: visible; }
   .grade-row { display: flex; gap: 6px; }
   .grade-btn {
     flex: 1; padding: 9px 0; border: 1px solid var(--line);
@@ -203,7 +227,7 @@
 
       <div class="field">
         <div class="field-head">
-          <label>Interest rate</label>
+          <label>Interest rate<span class="help" tabindex="0" role="note" aria-label="About interest rate">?<span class="tooltip">Selecting a grade auto-sets a typical interest rate, but you can override it.</span></span></label>
           <span class="val" id="intRateVal">14.0%</span>
         </div>
         <input type="range" id="intRate" min="5" max="31" step="0.1" value="14">
@@ -266,7 +290,7 @@
 
       <div class="metric">
         <div class="metric-head">
-          <span class="metric-name">Loss given default (LGD)</span>
+          <span class="metric-name">Loss given default (LGD)<span class="help" tabindex="0" role="note" aria-label="About loss given default">?<span class="tooltip">The loss model's strongest driver is how long a loan ran before failing — not known when a loan is applied for. So the dashboard uses each grade's observed average loss instead of that model.</span></span></span>
           <span class="metric-val" id="lgdVal">—</span>
         </div>
         <div class="bar-track"><div class="bar-fill" id="lgdBar" style="width:0%"></div></div>
@@ -327,7 +351,7 @@
   </div>
 
   <footer>
-    Predictions use this project's fitted Stage 1 logistic model (standardised features) for probability of default and the observed average loss-given-default by grade for severity; the survival curve uses the Cox proportional-hazards fit. Selecting a grade auto-sets a typical interest rate, but you can override it.
+    Predictions use this project's fitted Stage 1 logistic model (standardised features) for probability of default and the observed average loss-given-default by grade for severity; the survival curve uses the Cox proportional-hazards fit.
     <div class="disclaimer">For demonstration only. The Stage 2 severity (LGD) model is fitted using “months on book” — how long a loan has been active, a post-origination variable not known at application time — which is one reason the dashboard uses observed average loss by grade rather than that model's coefficients. Trained on unsecured consumer loans (Lending Club, 2007–2018); not a substitute for a lender's own underwriting.</div>
   </footer>
 </div>

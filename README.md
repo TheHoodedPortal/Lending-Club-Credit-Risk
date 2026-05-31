@@ -114,9 +114,11 @@ The loss model has an oddity: the coefficient on grade comes out *negative*, imp
 | Annual income | 0.0% |
 | Debt-to-income | 0.0% |
 
-One variable does essentially all the work. **Loss severity is almost entirely a question of *when* a loan fails:** default early and most of the principal is still outstanding; default late and the borrower has already repaid most of it. Grade, FICO, and the rest explain almost nothing by comparison — which is why grade's coefficient in the combined model is small and unstable enough to flip sign. It simply has very little real signal to contribute.
+One variable does essentially all the work. **Loss severity is almost entirely a question of *when* a loan fails:** default early and most of the principal is still outstanding; default late and the borrower has already repaid most of it. Grade, FICO, and the rest explain almost nothing by comparison — which is why grade's coefficient in the combined model is small and unstable enough to flip sign.
 
-In short: **grade tells you *whether* a borrower defaults; timing tells you *how much* is lost.** Because grade barely affects loss severity, its regression coefficient is unreliable — so wherever this project needs a loss figure per grade (Expected Loss, buffer sizing, the dashboard), it uses the actual average loss observed for each grade instead of the coefficient.
+**But here's the catch that makes the model unusable for its intended job.** The one variable that genuinely predicts loss — *months on book* — is simply how long a loan has already been running, which you only know *after* it exists. At the moment a lender is deciding on a brand-new application, it is unknown (effectively zero for everyone), so the model's single real predictor can't be fed in. Scoring a fresh loan with it would mean peeking at the future.
+
+**So this project doesn't use the loss model to *predict* severity — it uses it to *prove a point*.** The model earns one honest, well-evidenced conclusion: *grade tells you whether a borrower defaults; timing tells you how much is lost.* Then, wherever a per-loan loss figure is actually needed (Expected Loss, buffer sizing, the dashboard), the project falls back on the **average loss observed for each grade**. That figure depends only on the loan's grade — known up front — and it sidesteps both the months-on-book leakage and the unstable grade coefficient. The regression isn't wasted; it's the evidence that justifies the simpler choice.
 
 ### 5. Putting it together — Expected Loss
 
