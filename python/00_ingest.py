@@ -60,9 +60,15 @@ df["months_obs"] = (
 
 # ── Target variable ───────────────────────────────────────────────────────────
 BAD_STATUS = {
-    "Default", "Charged Off", "Late (90-120 days)",
+    "Default",
+    "Charged Off",
+    "Late (31-120 days)",
     "Does not meet the credit policy. Status:Charged Off",
 }
+# Note: Lending Club's "Late (31-120 days)" is the closest available label
+# to 90-day delinquency. The 31-day lower bound means this bucket captures
+# some loans that may have cured, but it is the most appropriate proxy
+# for cash-flow interruption in this dataset.
 df["delq90"] = df["loan_status"].isin(BAD_STATUS).astype(int)
 print(f"  90-day delinquency rate: {df['delq90'].mean():.2%} "
       f"({df['delq90'].sum():,} loans)")

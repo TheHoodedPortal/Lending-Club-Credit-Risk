@@ -357,14 +357,14 @@
 <script>
 // ── Fitted model coefficients (from 03_models.ipynb) ─────────────────────────
 const LOGIT = {
-  intercept: -2.0740616192077623,
+  intercept: -1.8413829377535325,
   coef: {
-    int_rate: -0.27243611780731153, dti: 0.02704902964944714,
-    fico: -0.22422370863066104, loan_amnt: 0.08735953730585115,
-    annual_inc: -0.5371554882786788, revol_util: 0.061953596369681695,
-    delinq_2yrs: 0.004524217312289432, open_acc: 0.07698646130603645,
-    pub_rec: 0.012935451401299224, months_obs: -0.7243008613945363,
-    term: 0.14424137974163845, grade_num: 0.6862377524351901
+    int_rate: 0.05140241935700668, dti: 0.03812587438305077,
+    fico: -0.20870180445778166, loan_amnt: 0.07963701758347476,
+    annual_inc: -0.3685354209067973, revol_util: -0.05066565800928426,
+    delinq_2yrs: -0.007801818367478535, open_acc: 0.05712598158019652,
+    pub_rec: 0.014655815641732465, term: 0.052811628167129615,
+    grade_num: 0.45467498890930497
   }
 };
 const SCALER = {
@@ -377,7 +377,6 @@ const SCALER = {
   delinq_2yrs:{m:0.328466313117367,s:0.897194976500328},
   open_acc:{m:11.651925365678578,s:5.549573671285468},
   pub_rec:{m:0.21532751317021226,s:0.6115425238326924},
-  months_obs:{m:23.225778291362346,s:12.1256819537717},
   term:{m:42.80207230618057,s:10.815800834419292},
   grade_num:{m:2.7349911177967825,s:1.2690720883478936}
 };
@@ -487,9 +486,9 @@ document.getElementById('bufBtn').onclick = runBufferSim;
 document.getElementById('rateLock').onclick = () => setRateLock(!rateLocked);
 
 // PD percentiles across all 2.26M loans (0,5,...,100) — for the benchmark
-const PD_PCT = [0.0000,0.0276,0.0388,0.0487,0.0588,0.0689,0.0796,0.0912,
-  0.1034,0.1165,0.1308,0.1462,0.1631,0.1816,0.2026,0.2269,0.2556,0.2907,
-  0.3374,0.4108,0.9591];
+const PD_PCT = [0.0000,0.0495,0.0597,0.0687,0.0784,0.0890,0.0980,0.1057,
+  0.1132,0.1213,0.1312,0.1431,0.1545,0.1647,0.1753,0.1887,0.2100,0.2354,
+  0.2655,0.3281,0.9721];
 
 function pdPercentile(pd) {
   // interpolate the borrower's PD against the portfolio distribution
@@ -506,7 +505,7 @@ function pdPercentile(pd) {
 }
 
 // Fixed assumptions for variables not exposed as sliders
-const FIXED = { delinq_2yrs: 0, open_acc: 11, pub_rec: 0, months_obs: 12 };
+const FIXED = { delinq_2yrs: 0, open_acc: 11, pub_rec: 0 };
 
 let state = {
   grade_num: 3, int_rate: 14, fico: 690, annual_inc: 65000,
@@ -587,7 +586,6 @@ function compute() {
     delinq_2yrs: FIXED.delinq_2yrs,
     open_acc: FIXED.open_acc,
     pub_rec: FIXED.pub_rec,
-    months_obs: FIXED.months_obs,
     term: state.term,
     grade_num: state.grade_num
   };
