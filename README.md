@@ -36,7 +36,7 @@ This project builds a statistically grounded answer in three steps:
 |---|---|
 | What share of loans go 90 days delinquent? | **12.9%** |
 | When a loan defaults, what fraction is lost? | **46.7%** on average |
-| Total expected loss across the portfolio | **$1.97 billion** |
+| Total expected loss across the portfolio | **$2.13 billion** |
 | Buffer needed under normal conditions | **$389M** (39% of one month's cash flow) |
 | Buffer needed in a 2008-style crisis | **$1.06B** (105% of one month's cash flow) |
 
@@ -104,7 +104,7 @@ The loss model has an oddity: the coefficient on grade comes out *negative*, imp
 
 | Variable (on its own) | Share of loss severity explained |
 |---|---|
-| **Months on book** | **67.7%** |
+| **Months on book** | **68.8%** |
 | Revolving utilisation | 0.8% |
 | FICO score | 0.6% |
 | Loan term | 0.6% |
@@ -124,16 +124,16 @@ Combining the two stages gives **Expected Loss = Probability of Default × Loss 
 
 | Grade | Default probability | Loss if default | Expected loss |
 |---|---|---|---|
-| A | 3.3% | 45.1% | $94M |
-| B | 7.9% | 45.1% | $337M |
-| C | 13.2% | 46.9% | **$605M** |
-| D | 18.9% | 47.3% | $455M |
-| E | 26.7% | 47.1% | $298M |
-| F | 34.9% | 47.9% | $134M |
-| G | 38.1% | 51.3% | $48M |
-| **Total** | | | **$1,970M** |
+| A | 3.6% | 45.7% | $104M |
+| B | 8.7% | 45.4% | $369M |
+| C | 14.4% | 47.0% | **$660M** |
+| D | 20.4% | 47.4% | $492M |
+| E | 28.3% | 46.8% | $313M |
+| F | 36.4% | 47.4% | $138M |
+| G | 40.0% | 50.6% | $50M |
+| **Total** | | | **$2,126M** |
 
-A subtle but important result: **Grade C loans drive the largest absolute loss** ($605M) — not because they are the riskiest, but because there are so many of them. Concentration matters as much as risk rate.
+A subtle but important result: **Grade C loans drive the largest absolute loss** ($660M) — not because they are the riskiest, but because there are so many of them. Concentration matters as much as risk rate.
 
 ![Two-stage Expected Loss by grade](output/figures/expected_loss_by_grade.png)
 

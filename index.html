@@ -421,8 +421,8 @@ const GRADE_LETTER = {1:'A',2:'B',3:'C',4:'D',5:'E',6:'F',7:'G'};
 const PORT = {
   dist:   [0.1916,0.2936,0.2875,0.1435,0.0600,0.0185,0.0054],
   amount: [14600,14170,15035,15709,17452,19124,20380],
-  pd:     [0.0328,0.0794,0.1321,0.1890,0.2670,0.3491,0.3809],
-  lgd:    [0.4514,0.4513,0.4693,0.4729,0.4713,0.4792,0.5131]
+  pd:     [0.0359,0.0866,0.1437,0.2036,0.2830,0.3644,0.4003],
+  lgd:    [0.4572,0.4538,0.4701,0.4743,0.4678,0.4739,0.5064]
 };
 const PORT_CUM = PORT.dist.reduce((a,p,i)=>{a.push((a[i-1]||0)+p);return a;},[]);
 
@@ -602,7 +602,7 @@ function compute() {
   // The multivariate OLS produced a counterintuitive negative grade coefficient
   // due to multicollinearity (grade ↔ rate/term/tenure); the observed averages
   // are the faithful, data-grounded relationship used throughout the project.
-  const LGD_BY_GRADE = [0.4514,0.4513,0.4693,0.4729,0.4713,0.4792,0.5131];
+  const LGD_BY_GRADE = [0.4572,0.4538,0.4701,0.4743,0.4678,0.4739,0.5064];
   let lgd = LGD_BY_GRADE[state.grade_num - 1];
 
   const el = pd * lgd * state.loan_amnt;
