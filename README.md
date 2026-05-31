@@ -34,10 +34,10 @@ This project builds a statistically grounded answer in three steps:
 
 | Question | Answer |
 |---|---|
-| What share of loans go 90 days delinquent? | **11.9%** |
+| What share of loans go 90 days delinquent? | **12.9%** |
 | When a loan defaults, what fraction is lost? | **46.7%** on average |
 | Total expected loss across the portfolio | **$1.97 billion** |
-| Buffer needed under normal conditions | **$360M** (36% of one month's cash flow) |
+| Buffer needed under normal conditions | **$389M** (39% of one month's cash flow) |
 | Buffer needed in a 2008-style crisis | **$1.06B** (105% of one month's cash flow) |
 
 The single most important finding: **a severe downturn would require holding more than an entire month of portfolio cash flow in reserve** — nearly three times the normal-conditions buffer.
@@ -68,9 +68,9 @@ Grouping loans by the quarter they were issued reveals how different "vintages" 
 
 ### 3. Stage 1 — How likely is default?
 
-A logistic regression model predicts whether each loan will become 90 days delinquent. It separates risk well (AUC = 0.72), which is solid for consumer credit.
+A logistic regression model predicts whether each loan will become 90 days delinquent. It separates risk well (AUC = 0.68), which is solid for an application-time model — meaning it uses only information available at the point a loan is issued, with no look-ahead into future payment history.
 
-More useful than the score is *what the model learned*. Each factor's effect is shown below in percentage points of default risk, with bars showing the 95% confidence interval. Loan grade dominates; longer-tenured loans and higher-income borrowers are the safest.
+More useful than the score is *what the model learned*. Each factor's effect is shown below in percentage points of default risk, with bars showing the 95% confidence interval. Loan grade dominates; higher income and better credit scores are the strongest protective factors.
 
 ![What drives a borrower to default](output/figures/marginal_effects.png)
 
@@ -84,7 +84,7 @@ Loan grade is by far the strongest signal — unsurprising, since it is Lending 
 
 That tight overlap is what makes interest rate's coefficient behave strangely — a problem dissected in the next section.
 
-But the bigger point is the ceiling: at AUC ≈ 0.72, **consumer default is only partly predictable, and that's expected.** The strongest triggers — job loss, illness, divorce — are life events no loan dataset contains. This isn't a weakness in the model; it's the whole reason a buffer exists. If default were perfectly predictable a lender could price it in exactly and hold no reserve. Because it isn't, a cushion sized for the uncertainty is essential — which is what the rest of this project quantifies.
+But the bigger point is the ceiling: at AUC ≈ 0.68, **consumer default is only partly predictable, and that's expected.** The strongest triggers — job loss, illness, divorce — are life events no loan dataset contains. This isn't a weakness in the model; it's the whole reason a buffer exists. If default were perfectly predictable a lender could price it in exactly and hold no reserve. Because it isn't, a cushion sized for the uncertainty is essential — which is what the rest of this project quantifies.
 
 We also model *how quickly* loans fail using survival analysis. Grade A loans stay healthy for years; nearly half of Grade G loans have stopped paying within five years.
 
@@ -139,13 +139,13 @@ A subtle but important result: **Grade C loans drive the largest absolute loss**
 
 ### 6. Sizing the buffer
 
-Finally, the buffer itself. Under normal conditions the portfolio needs roughly **$360M** — about 36% of a month's scheduled cash flow. But the buffer must survive bad years, not just average ones, so it is stress-tested against progressively worse delinquency rates.
+Finally, the buffer itself. Under normal conditions the portfolio needs roughly **$389M** — about 39% of a month's scheduled cash flow. But the buffer must survive bad years, not just average ones, so it is stress-tested against progressively worse delinquency rates.
 
 | Scenario | Delinquency rate | Buffer required | Share of monthly cash flow |
 |---|---|---|---|
-| Normal (observed) | 11.9% | $360M | 36% |
-| Mild stress | 14.9% | $450M | 45% |
-| Moderate stress | 17.9% | $540M | 54% |
+| Normal (observed) | 12.9% | $389M | 39% |
+| Mild stress | 16.1% | $486M | 48% |
+| Moderate stress | 19.3% | $583M | 58% |
 | Severe (2007 crisis level) | 35.0% | $1,057M | 105% |
 
 ![Buffer under stress scenarios](output/figures/buffer_scenarios.png)
@@ -169,8 +169,8 @@ Set a borrower's profile and you immediately see their probability of default, e
 ```
 ├── index.html            ← interactive risk dashboard (live demo)
 ├── data/
-│   ├── raw/              ← original CSV (not tracked — too large)
-│   └── processed/        ← cleaned data
+│   ├── raw/              ← original CSV (not tracked — too large for GitHub)
+│   └── processed/        ← cleaned data (generated by 00_ingest.py, not tracked)
 ├── python/               ← complete analysis
 │   ├── 00_ingest.py      ← load and clean the data
 │   ├── 01_eda.ipynb      ← explore the loans
@@ -184,6 +184,8 @@ Set a borrower's profile and you immediately see their probability of default, e
 └── README.md
 ```
 
+Note: `data/` is not tracked in this repository. After cloning, create `data/raw/`, download the Lending Club CSV into it, and run the ingest script to build the processed dataset.
+
 ---
 
 ## Method summary
@@ -193,7 +195,7 @@ Set a borrower's profile and you immediately see their probability of default, e
 | Data cleaning | Column selection, date parsing, feature engineering | `pandas`, `numpy` |
 | EDA | Distributions, correlation matrix, cohort analysis | `matplotlib`, `seaborn` |
 | Vintage analysis | Cohort curves by grade and year | `pandas`, `matplotlib` |
-| Stage 1 — PD | Logistic regression | `scikit-learn`, `statsmodels` |
+| Stage 1 — PD | Logistic regression (application-time features only) | `scikit-learn`, `statsmodels` |
 | Time-to-stoppage | Cox proportional hazards, Kaplan-Meier | `lifelines` |
 | Stage 2 — LGD | OLS regression | `statsmodels` |
 | Buffer sizing | Scenario analysis, sensitivity table | `numpy` |
@@ -205,17 +207,18 @@ Set a borrower's profile and you immediately see their probability of default, e
 ## Running it yourself
 
 ```bash
-cd python
-pip install -r requirements.txt
+# Install dependencies
+pip install -r python/requirements.txt
 
-# From the project root, build the cleaned dataset first
+# Download the Lending Club CSV from Kaggle into data/raw/
+# then build the cleaned dataset from the project root:
 python python/00_ingest.py
 
-# Then open the analysis notebooks
-jupyter notebook
+# Open the analysis notebooks
+jupyter notebook python/
 ```
 
-Requires Python 3.10 or newer.
+Requires Python 3.10 or newer. The raw CSV (`accepted_2007_to_2018Q4.csv`) must be downloaded manually from [Kaggle](https://www.kaggle.com/datasets/wordsforthewise/lending-club) and placed in `data/raw/` before running the ingest script.
 
 ---
 
@@ -223,6 +226,8 @@ Requires Python 3.10 or newer.
 
 - **This is consumer credit data.** Lending Club loans are unsecured personal loans. The methodology transfers to commercial lending and leases, but the specific numbers would differ.
 - **Recent loans look deceptively safe.** Loans from 2017–2018 hadn't matured when the data was collected, so their delinquency rates understate true risk.
+- **The delinquency label is approximate.** Lending Club's available status "Late (31-120 days)" is the closest proxy for 90-day delinquency in this dataset; the 31-day lower bound means some loans in this bucket may have subsequently cured.
+- **The PD model uses application-time features only.** Post-origination variables (e.g. months on book) are excluded from the default model to avoid data leakage, and are used only in the survival and loss severity analyses where they are appropriate.
 - **Models simplify reality.** Default is partly driven by unpredictable life events, so even a good model leaves meaningful uncertainty — which is exactly why a buffer is needed.
 
 ---
