@@ -52,11 +52,18 @@ df["last_pymnt_d"] = pd.to_datetime(df["last_pymnt_d"], format="%b-%Y",
 df["issue_year"]    = df["issue_d"].dt.year
 df["issue_quarter"] = df["issue_d"].dt.to_period("Q").astype(str)
 
-today = pd.Timestamp("2019-01-01")
+today = pd.Timestamp("2019-01-01")    # data snapshot date
 df["months_obs"] = (
     (df["last_pymnt_d"].fillna(today) - df["issue_d"])
     .dt.days / 30
 ).clip(lower=0).round(1)
+
+# ── Loan age at the snapshot ──────────────────────────────────────────────────
+# Calendar months the loan has been on the books as of the snapshot, regardless
+# of payment status. Unlike months_obs (issue → last payment, i.e. ≈ time-to-
+# default for bad loans), `age` is known for every live loan today and is the
+# left-truncation point for the forward-looking survival / ECL model.
+df["age"] = ((today - df["issue_d"]).dt.days / 30).clip(lower=0).round(1)
 
 # ── Target variable ───────────────────────────────────────────────────────────
 BAD_STATUS = {
@@ -72,6 +79,21 @@ BAD_STATUS = {
 df["delq90"] = df["loan_status"].isin(BAD_STATUS).astype(int)
 print(f"  90-day delinquency rate: {df['delq90'].mean():.2%} "
       f"({df['delq90'].sum():,} loans)")
+
+# ── Resolved vs active ────────────────────────────────────────────────────────
+# Resolved loans have a known final outcome and form the training history.
+# Active loans are still open as of the snapshot — the live book the
+# forward-looking expected-credit-loss model reserves against.
+RESOLVED_STATUS = {
+    "Fully Paid",
+    "Charged Off",
+    "Default",
+    "Does not meet the credit policy. Status:Fully Paid",
+    "Does not meet the credit policy. Status:Charged Off",
+}
+df["resolved"] = df["loan_status"].isin(RESOLVED_STATUS)
+print(f"  Resolved (training history): {df['resolved'].sum():,} | "
+      f"Active (live book): {(~df['resolved']).sum():,}")
 
 # ── FICO midpoint ─────────────────────────────────────────────────────────────
 df["fico"] = (df["fico_range_low"] + df["fico_range_high"]) / 2
