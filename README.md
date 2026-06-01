@@ -80,11 +80,11 @@ The headline finding: **loss severity is roughly constant across grades (45–51
 
 #### Why this model isn't used to predict — and what is used instead
 
-The model fits well in sample (R² = 0.74), but almost all of that comes from a single variable: **months on book** — how long the loan had already run before it failed (default early and most of the principal is still owed; default late and it's nearly repaid). Strip that out and use only what's known when a loan is *approved*, and the model explains almost nothing:
+The model fits well (R² = 0.74) — but almost all of that comes from one variable: **months on book**, how long the loan had already run before it failed (default early and most of the principal is still owed; default late and it's nearly repaid). Drop it and use only what's known when a loan is *approved*, and the same regression explains just **4%**.
 
-![How much of loss severity is predictable](output/figures/lgd_predictability.png)
+That gap is a matter of *context*, not a flawed model. At **application time** — scoring a brand-new loan, which is what sizing the buffer comes down to — months on book is unknown; it lies in the future, so the one variable that really predicts loss can't be used. But for an **existing book**, where each loan's age is already on record, this same model estimates loss severity loan-by-loan with genuine accuracy — it would be the right tool for valuing or provisioning a portfolio that's already on the shelf.
 
-The catch is that months on book is *post-origination* — unknown at application time — so the one variable that predicts loss can't be used to score a new loan, leaving essentially no application-time signal to model. The buffer doesn't need one anyway: Expected Loss only requires the *average* loss per grade, and the per-grade sample mean is precisely the right estimator for that — unbiased, and pinned to within about ±0.8 points by the thousands of defaults in every grade. So the project uses the **observed average loss per grade**: known up front, and a more honest figure than a regression whose only real signal comes from the future.
+Because this project sizes the reserve *at origination*, it uses the **observed average loss per grade** for severity instead — known up front, and the unbiased, minimum-variance estimator of exactly the per-grade average that Expected Loss requires (pinned to within about ±0.8 points by the thousands of defaults in each grade).
 
 ### 4. Putting it together — Expected Loss
 
