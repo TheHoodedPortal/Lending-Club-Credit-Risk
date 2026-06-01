@@ -20,9 +20,9 @@ It runs entirely in the browser on the project's own fitted coefficients. More d
 
 ## The question
 
-When a borrower misses payments for 90 days, the lender loses the cash flow they were counting on. A bank needs to know, in advance, how large a financial cushion to set aside for this. Set it too low and a downturn threatens solvency; set it too high and capital sits idle.
+When a borrower stops paying, the lender loses cash flow it was counting on. A lender needs to know, in advance, how large a cushion to set aside for this. Set it too low and a downturn threatens solvency; set it too high and capital sits idle earning nothing.
 
-This project builds a statistically grounded answer in three steps:
+The project sizes that cushion with the **Expected Loss** framework that regulated banks use under Basel III — `Expected Loss = Probability of Default × Loss Given Default × Exposure` — and then stress-tests it. That breaks the work into three questions:
 
 1. **How likely is a borrower to default?** (Probability of Default)
 2. **If they default, how much is actually lost?** (Loss Given Default)
@@ -44,63 +44,43 @@ The single most important finding: **a severe downturn would require holding mor
 
 ---
 
-## How the analysis flows
+## The analysis, step by step
 
-The project moves from understanding the data, to modelling risk, to sizing the buffer, to wrapping it all in a usable tool. Each stage builds on the last.
+The project moves from understanding the data, to modelling the two pieces of Expected Loss, to sizing the buffer, to wrapping it all in a usable tool. Each stage builds on the last.
 
-### 1. Understanding the loans
+### 1. The data, and what "delinquent" means
 
-The first step is exploring who borrows and how loans are graded. Lending Club assigns each loan a grade from A (safest) to G (riskiest), and that grade turns out to be the strongest single signal of risk.
+Every loan carries a Lending Club **grade from A (safest) to G (riskiest)** — the lender's own composite risk score, distilled from credit history and income before the loan is issued. It turns out to be the strongest single signal of risk in the whole dataset.
 
-**Delinquency rises steeply with grade** — from 3.6% for Grade A loans to 40.0% for Grade G.
+This analysis labels a loan **delinquent** if its status is `Late (31–120 days)`, `Default`, or `Charged Off`. Lending Club has no exact "90 days past due" flag, so the `Late (31–120 days)` bucket is used as the closest available proxy for a serious, cash-flow-interrupting delinquency. On that definition, **12.9% of loans go bad**, and the rate climbs steeply with grade — **from 3.6% for Grade A to 40.0% for Grade G.**
 
 ![Delinquency rate by loan grade](output/figures/delinquency_by_grade.png)
 
-The risk variables also relate to each other in sensible ways. For example, borrowers with higher credit scores get lower interest rates, and higher credit utilisation goes hand in hand with lower scores.
-
-![Relationships between risk variables](output/figures/correlation_heatmap.png)
-
-### 2. Tracking loans over time (vintage analysis)
-
-Grouping loans by the quarter they were issued reveals how different "vintages" performed. The 2007–2008 financial crisis is clearly visible, and recent loans appear artificially safe simply because they haven't had time to go bad yet (a known effect called *maturation bias*).
+One caveat shapes everything downstream. Grouping loans by the quarter they were issued ("vintages") shows the 2007–2008 crisis clearly — and shows that **recent loans look deceptively safe simply because they hadn't had time to go bad** by the time the data was collected (a well-known effect called *maturation bias*).
 
 ![Delinquency by issue cohort and grade](output/figures/vintage_curves_by_grade.png)
 
-### 3. Stage 1 — How likely is default?
+### 2. Stage 1 — How likely is default?
 
-A logistic regression model predicts whether each loan will become 90 days delinquent. It separates risk well (AUC = 0.68), which is solid for an application-time model — meaning it uses only information available at the point a loan is issued, with no look-ahead into future payment history.
+**Setup.** A logistic regression predicts whether a loan will become delinquent, using **only information available when the loan is issued** (grade, interest rate, FICO, income, loan amount, DTI, term, and a few credit-history fields). It is trained on loans issued **2007–2017 and tested on the held-out 2018 vintage**, so the score is judged on loans it has never seen. On that test it reaches **AUC = 0.68** — solid for an application-time model.
 
-More useful than the score is *what the model learned*. Each bar below shows how much a one-standard-deviation increase in a factor moves a borrower's default probability — in percentage points, with 95% confidence intervals — which puts every factor on a common footing. Loan grade dominates; higher income and a better credit score are the strongest protective factors.
+More useful than the score is *what the model learned*. The chart below shows how much a one-standard-deviation increase in each factor moves a borrower's default probability, in percentage points, with 95% confidence intervals — putting every factor on a common footing. **Loan grade dominates; higher income and a better credit score are the strongest protective factors.** (Interest rate barely registers on its own because it is set directly from the grade, so the two move in near-lockstep and the model can't separate them.)
 
 ![What drives a borrower to default](output/figures/marginal_effects.png)
 
-#### What the model can and can't predict
+**The ceiling is the point.** At AUC ≈ 0.68, **consumer default is only partly predictable — and that is expected.** The strongest triggers (job loss, illness, divorce) are life events no loan dataset contains. This isn't a weakness in the model; it's the entire reason a buffer exists. If default were perfectly predictable a lender could price it in exactly and hold no reserve. Because it isn't, a cushion sized for the uncertainty is essential — which is what the rest of this project quantifies.
 
-Loan grade is by far the strongest signal — unsurprising, since it is Lending Club's own risk score, already distilled from credit history and income before a loan is issued. It overlaps so heavily with interest rate (the rate is *set* from the grade) that the two rise in near-perfect lockstep:
+### 3. Stage 2 — How much is lost when default happens?
 
-| Delinquency rises with grade | Interest rate rises with grade |
-|---|---|
-| ![Delinquency by grade](output/figures/delinquency_by_grade.png) | ![Interest rate by grade](output/figures/interest_rate_by_grade.png) |
+**Setup.** Knowing a loan *will* default isn't enough — we need to know how much is lost. Among loans that actually defaulted, loss given default is measured as the share of principal not recovered through payments: `LGD = (loan amount − total payments received) / loan amount`, bounded to [0, 1]. A second regression (OLS) then relates that loss to the loan's characteristics.
 
-That tight overlap is what makes interest rate's coefficient behave strangely — a problem dissected in the next section.
-
-But the bigger point is the ceiling: at AUC ≈ 0.68, **consumer default is only partly predictable, and that's expected.** The strongest triggers — job loss, illness, divorce — are life events no loan dataset contains. This isn't a weakness in the model; it's the whole reason a buffer exists. If default were perfectly predictable a lender could price it in exactly and hold no reserve. Because it isn't, a cushion sized for the uncertainty is essential — which is what the rest of this project quantifies.
-
-We also model *how quickly* loans fail using survival analysis. Grade A loans stay healthy for years; nearly half of Grade G loans have stopped paying within five years.
-
-![Survival curves by grade](output/figures/kaplan_meier_by_grade.png)
-
-### 4. Stage 2 — How much is lost when default happens?
-
-Knowing a loan will default isn't enough — we need to know how much money is actually lost. A second regression model estimates this "loss given default" for each loan.
-
-The key insight: **loss severity is roughly constant across grades (45–51%)**. In other words, a loan's grade tells you *whether* it will default, but not *how much* you'll lose if it does.
+The headline finding: **loss severity is roughly constant across grades (45–51%).** A loan's grade tells you *whether* it will default, but barely anything about *how much* you lose if it does.
 
 ![What determines loss severity](output/figures/lgd_coefficients.png)
 
-#### Diagnosing the coefficients
+#### Why this model isn't used to predict — and what is used instead
 
-The loss model has an oddity: the coefficient on grade comes out *negative*, implying worse grades lose less — the opposite of the raw data. The reason becomes obvious once you ask a simpler question: how much of loss severity does each variable explain *on its own*?
+The regression has an oddity: the coefficient on grade comes out *negative*, implying worse grades lose less — the opposite of the raw data. The reason becomes clear once you ask how much of loss severity each variable explains *on its own*:
 
 | Variable (on its own) | Share of loss severity explained |
 |---|---|
@@ -114,15 +94,15 @@ The loss model has an oddity: the coefficient on grade comes out *negative*, imp
 | Annual income | 0.0% |
 | Debt-to-income | 0.0% |
 
-One variable does essentially all the work. **Loss severity is almost entirely a question of *when* a loan fails:** default early and most of the principal is still outstanding; default late and the borrower has already repaid most of it. Grade, FICO, and the rest explain almost nothing by comparison — which is why grade's coefficient in the combined model is small and unstable enough to flip sign.
+One variable does essentially all the work. **Loss severity is almost entirely a question of *when* a loan fails:** default early and most of the principal is still outstanding; default late and the borrower has already repaid most of it. Everything else — grade, FICO, income — explains so little that grade's coefficient becomes small and unstable enough to flip sign.
 
-**But here's the catch that makes the model unusable for its intended job.** The one variable that genuinely predicts loss — *months on book* — is simply how long a loan has already been running, which you only know *after* it exists. At the moment a lender is deciding on a brand-new application, it is unknown (effectively zero for everyone), so the model's single real predictor can't be fed in. Scoring a fresh loan with it would mean peeking at the future.
+**But that one real predictor is unusable for the job.** *Months on book* is simply how long a loan has already been running, which you only know *after* it exists. At the moment a lender decides on a brand-new application it is unknown (effectively zero for everyone), so the model's single meaningful input can't be supplied without peeking at the future.
 
-**So this project doesn't use the loss model to *predict* severity — it uses it to *prove a point*.** The model earns one honest, well-evidenced conclusion: *grade tells you whether a borrower defaults; timing tells you how much is lost.* Then, wherever a per-loan loss figure is actually needed (Expected Loss, buffer sizing, the dashboard), the project falls back on the **average loss observed for each grade**. That figure depends only on the loan's grade — known up front — and it sidesteps both the months-on-book leakage and the unstable grade coefficient. The regression isn't wasted; it's the evidence that justifies the simpler choice.
+**So the loss model isn't used to *predict* severity — it's used to *prove a point*:** *grade tells you whether a borrower defaults; timing tells you how much is lost.* Wherever a per-loan loss figure is actually needed (Expected Loss, buffer sizing, the dashboard), the project uses the **average loss observed for each grade** instead. That number depends only on the grade — known up front — and sidesteps both the months-on-book leakage and the unstable coefficient. The regression isn't wasted; it's the evidence that justifies the simpler, honest choice.
 
-### 5. Putting it together — Expected Loss
+### 4. Putting it together — Expected Loss
 
-Combining the two stages gives **Expected Loss = Probability of Default × Loss Given Default × Loan Exposure** — the standard framework regulated banks use under Basel III.
+Multiplying the two stages by each grade's outstanding balance gives Expected Loss per grade:
 
 | Grade | Default probability | Loss if default | Expected loss |
 |---|---|---|---|
@@ -139,9 +119,15 @@ A subtle but important result: **Grade C loans drive the largest absolute loss**
 
 ![Two-stage Expected Loss by grade](output/figures/expected_loss_by_grade.png)
 
-### 6. Sizing the buffer
+### 5. Sizing the buffer
 
-Finally, the buffer itself. Under normal conditions the portfolio needs roughly **$389M** — about 39% of a month's scheduled cash flow. But the buffer must survive bad years, not just average ones, so it is stress-tested against progressively worse delinquency rates.
+Expected Loss is the *average* year. A buffer has to survive *bad* years. The buffer here is framed in cash-flow terms: when a loan goes delinquent, the lender stops receiving its instalments, and the working assumption is that **a delinquency costs roughly three months of that loan's instalments** before it is resolved or written off. So:
+
+```
+buffer = monthly scheduled cash flow × delinquency rate × 3 months
+```
+
+With ~$1.0B in monthly instalments across the portfolio and a 12.9% delinquency rate, the normal-conditions buffer is about **$389M — roughly 39% of a single month's cash flow.** The buffer is then stress-tested against progressively worse delinquency rates:
 
 | Scenario | Delinquency rate | Buffer required | Share of monthly cash flow |
 |---|---|---|---|
@@ -152,11 +138,15 @@ Finally, the buffer itself. Under normal conditions the portfolio needs roughly 
 
 ![Buffer under stress scenarios](output/figures/buffer_scenarios.png)
 
-Because recovery rates are uncertain, a sensitivity table shows the buffer across every combination of delinquency and recovery assumptions — giving decision-makers a full picture rather than a single number.
+The headline figures assume no recovery on delinquent balances. Because real recovery rates are uncertain, a sensitivity table shows the buffer across every combination of delinquency rate and recovery rate (0–60%) — giving a decision-maker a full picture rather than a single point estimate.
 
 ![Buffer sensitivity analysis](output/figures/buffer_sensitivity.png)
 
----
+### 6. Supporting analysis — how *quickly* loans fail
+
+This piece sits outside the buffer arithmetic, but it answers a natural follow-up: not just *whether* a loan defaults, but *when*. A Cox proportional-hazards model and Kaplan-Meier curves model time-to-delinquency: **Grade A loans stay healthy for years, while nearly half of Grade G loans have stopped paying within five years.** This is what powers the live survival curve in the dashboard (it does not feed the Expected-Loss or buffer numbers above).
+
+![Survival curves by grade](output/figures/kaplan_meier_by_grade.png)
 
 ### 7. From analysis to tool: the interactive dashboard
 
@@ -182,7 +172,7 @@ Set a borrower's profile and you immediately see their probability of default, e
 │   └── requirements.txt
 ├── r/                    ← R implementation (planned — not yet present)
 ├── stata/                ← STATA implementation (planned — not yet present)
-├── output/figures/       ← all charts
+├── output/figures/       ← charts
 └── README.md
 ```
 
@@ -198,11 +188,9 @@ Note: `data/` is not tracked in this repository. After cloning, create `data/raw
 | EDA | Distributions, correlation matrix, cohort analysis | `matplotlib`, `seaborn` |
 | Vintage analysis | Cohort curves by grade and year | `pandas`, `matplotlib` |
 | Stage 1 — PD | Logistic regression (application-time features only) | `scikit-learn`, `statsmodels` |
-| Time-to-stoppage | Cox proportional hazards, Kaplan-Meier | `lifelines` |
+| Time-to-default | Cox proportional hazards, Kaplan-Meier | `lifelines` |
 | Stage 2 — LGD | OLS regression | `statsmodels` |
 | Buffer sizing | Scenario analysis, sensitivity table | `numpy` |
-
-**In plain terms:** `pandas` and `numpy` did the heavy lifting of loading 2.26M loans and reshaping the raw data into clean, model-ready variables. `matplotlib` and `seaborn` produced every chart in this README. The Stage 1 default model was built with `scikit-learn` (for the prediction and accuracy scoring) and `statsmodels` (for the regression coefficients and significance tests). `lifelines` handled the survival analysis — measuring not just *whether* a loan defaults but *how quickly*. The Stage 2 loss model used `statsmodels` for a standard regression. The final buffer figures were straightforward arithmetic on the model outputs, handled in `numpy`.
 
 ---
 
@@ -228,8 +216,7 @@ Requires Python 3.10 or newer. The raw CSV (`accepted_2007_to_2018Q4.csv`) must 
 
 - **This is consumer credit data.** Lending Club loans are unsecured personal loans. The methodology transfers to commercial lending and leases, but the specific numbers would differ.
 - **Recent loans look deceptively safe.** Loans from 2017–2018 hadn't matured when the data was collected, so their delinquency rates understate true risk.
-- **The delinquency label is approximate.** Lending Club's available status "Late (31-120 days)" is the closest proxy for 90-day delinquency in this dataset; the 31-day lower bound means some loans in this bucket may have subsequently cured.
-- **The PD model uses application-time features only.** Post-origination variables (e.g. months on book) are excluded from the default model to avoid data leakage, and are used only in the survival and loss severity analyses where they are appropriate.
+- **The buffer rests on simplifying assumptions.** It charges three months of lost instalments per delinquency and (in the headline figures) assumes no recovery; the sensitivity table is included precisely because those assumptions are uncertain.
 - **Models simplify reality.** Default is partly driven by unpredictable life events, so even a good model leaves meaningful uncertainty — which is exactly why a buffer is needed.
 
 ---
