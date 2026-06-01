@@ -282,15 +282,16 @@
         </div>
         <div class="bar-track"><div class="bar-fill" id="pdBar" style="width:0%"></div></div>
         <div class="metric-desc">Conditioned on the loan's age today — no look-ahead.</div>
+        <div class="metric-desc" id="pdBench" style="margin-top:4px;font-weight:500;color:var(--ink);"></div>
       </div>
 
       <div class="metric">
         <div class="metric-head">
-          <span class="metric-name">Loss given default<span class="help" tabindex="0" role="note" aria-label="About LGD">?<span class="tooltip">Fraction of the outstanding principal not recovered if the loan defaults — about 89% on unsecured loans (~11% recovery), roughly flat across the book.</span></span></span>
-          <span class="metric-val" id="lgdVal">—</span>
+          <span class="metric-name">Exposure at default<span class="help" tabindex="0" role="note" aria-label="About exposure at default">?<span class="tooltip">Principal still owed at the loan's projected default month — the base the loss applies to. It shrinks as the loan amortises. Expected loss is ~89% of this (recovery on unsecured loans is low).</span></span></span>
+          <span class="metric-val" id="eadVal">—</span>
         </div>
-        <div class="bar-track"><div class="bar-fill" id="lgdBar" style="width:0%"></div></div>
-        <div class="metric-desc">Loss on the outstanding balance · ≈89%, flat across the book.</div>
+        <div class="bar-track"><div class="bar-fill" id="eadBar" style="width:0%"></div></div>
+        <div class="metric-desc">Principal still owed when it defaults (projected) · loss severity ≈ 89%.</div>
       </div>
 
       <div class="el-box">
@@ -393,6 +394,18 @@ const SCEN = [
   { label:'Extreme',  mult:'2.5× default rates',   total:2767, ecl:[231,549,932,687,262,78,28] },
 ];
 const EXPOSURE_TOTAL = 9489;     // $M
+
+// Remaining-life PD percentiles across the active book (0,5,...,100) — for the benchmark
+const REM_PD_PCT = [0.0000,0.0295,0.0480,0.0620,0.0735,0.0836,0.0933,0.1029,0.1131,
+  0.1250,0.1387,0.1530,0.1679,0.1858,0.2086,0.2334,0.2616,0.3035,0.3735,0.5166,1.0000];
+function pdPercentile(pd){
+  if (pd<=REM_PD_PCT[0]) return 0;
+  if (pd>=REM_PD_PCT[REM_PD_PCT.length-1]) return 100;
+  for (let i=1;i<REM_PD_PCT.length;i++){
+    if (pd<=REM_PD_PCT[i]){ const lo=REM_PD_PCT[i-1], hi=REM_PD_PCT[i]; return (i-1+(pd-lo)/(hi-lo))*5; }
+  }
+  return 100;
+}
 
 function sigmoid(z){ return 1/(1+Math.exp(-z)); }
 
@@ -578,10 +591,18 @@ function update(){
   const pdBar=document.getElementById('pdBar');
   pdBar.style.width=Math.min(pd*100,100)+'%'; pdBar.style.background=c;
 
-  document.getElementById('lgdVal').textContent=(lgd*100).toFixed(1)+'%';
-  const lgdBar=document.getElementById('lgdBar');
-  lgdBar.style.width=(lgd*100)+'%';
-  lgdBar.style.background=getComputedStyle(document.documentElement).getPropertyValue('--accent');
+  // benchmark vs the active book's remaining-life PD distribution
+  const pct=Math.round(pdPercentile(pd));
+  const bench=document.getElementById('pdBench');
+  bench.textContent = pct>=50 ? `Riskier than ${pct}% of the active book.`
+                              : `Safer than ${100-pct}% of the active book.`;
+  bench.style.color=c;
+
+  // exposure at default (amortised balance at the projected default month)
+  document.getElementById('eadVal').textContent='$'+Math.round(bal).toLocaleString();
+  const eadBar=document.getElementById('eadBar');
+  eadBar.style.width=Math.min(bal/Math.max(state.loan_amnt,1)*100,100)+'%';
+  eadBar.style.background=getComputedStyle(document.documentElement).getPropertyValue('--accent');
 
   document.getElementById('elVal').textContent='$'+el.toLocaleString(undefined,{maximumFractionDigits:0});
   document.getElementById('elDetail').textContent =
