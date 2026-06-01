@@ -80,25 +80,11 @@ The headline finding: **loss severity is roughly constant across grades (45–51
 
 #### Why this model isn't used to predict — and what is used instead
 
-The regression has an oddity: the coefficient on grade comes out *negative*, implying worse grades lose less — the opposite of the raw data. The reason becomes clear once you ask how much of loss severity each variable explains *on its own*:
+The model fits well in sample (R² = 0.74), but almost all of that comes from a single variable: **months on book** — how long the loan had already run before it failed (default early and most of the principal is still owed; default late and it's nearly repaid). Strip that out and use only what's known when a loan is *approved*, and the model explains almost nothing:
 
-| Variable (on its own) | Share of loss severity explained |
-|---|---|
-| **Months on book** | **68.9%** |
-| Revolving utilisation | 0.9% |
-| FICO score | 0.8% |
-| Loan term | 0.6% |
-| Loan amount | 0.4% |
-| Interest rate | 0.4% |
-| Loan grade | 0.1% |
-| Annual income | 0.0% |
-| Debt-to-income | 0.0% |
+![How much of loss severity is predictable](output/figures/lgd_predictability.png)
 
-One variable does essentially all the work. **Loss severity is almost entirely a question of *when* a loan fails:** default early and most of the principal is still outstanding; default late and the borrower has already repaid most of it. Everything else — grade, FICO, income — explains so little that grade's coefficient becomes small and unstable enough to flip sign.
-
-**But that one real predictor is unusable for the job.** *Months on book* is simply how long a loan has already been running, which you only know *after* it exists. At the moment a lender decides on a brand-new application it is unknown (effectively zero for everyone), so the model's single meaningful input can't be supplied without peeking at the future.
-
-**So the loss model isn't used to *predict* severity — it's used to *prove a point*:** *grade tells you whether a borrower defaults; timing tells you how much is lost.* Wherever a per-loan loss figure is actually needed (Expected Loss, buffer sizing, the dashboard), the project uses the **average loss observed for each grade** instead. That number depends only on the grade — known up front — and sidesteps both the months-on-book leakage and the unstable coefficient. The regression isn't wasted; it's the evidence that justifies the simpler, honest choice.
+The catch is that months on book is *post-origination* — unknown at application time — so the one variable that predicts loss can't be used to score a new loan, leaving essentially no application-time signal to model. The buffer doesn't need one anyway: Expected Loss only requires the *average* loss per grade, and the per-grade sample mean is precisely the right estimator for that — unbiased, and pinned to within about ±0.8 points by the thousands of defaults in every grade. So the project uses the **observed average loss per grade**: known up front, and a more honest figure than a regression whose only real signal comes from the future.
 
 ### 4. Putting it together — Expected Loss
 
