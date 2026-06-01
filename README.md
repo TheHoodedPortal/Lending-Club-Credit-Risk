@@ -147,12 +147,13 @@ On **matured, normal-condition vintages (2010–2016) the prediction tracks real
 
 | Phase | Method | Library |
 |---|---|---|
-| Data cleaning | Column selection, date parsing, loan age, resolved/active split | `pandas`, `numpy` |
+| Data cleaning | Column selection, date parsing, loan age, recovery fields, resolved/active split | `pandas`, `numpy` |
 | EDA & vintage analysis | Distributions, correlation, cohort curves | `matplotlib`, `seaborn` |
 | PD — discrimination | Logistic regression (application-time features, out-of-time test) | `scikit-learn`, `statsmodels` |
 | PD — timing | Cox proportional hazards, Kaplan-Meier → remaining-life PD | `lifelines` |
-| LGD | Loss on outstanding principal (≈89%, ~11% recovery) × amortised exposure | `pandas`, `numpy` |
-| Reserve | Loan-level expected credit loss on the active book + PD stress + vintage backtest | `numpy` |
+| LGD | Loss on outstanding principal — flat ~89% (recovery ~11%); regression confirms it's unpredictable (R² < 1%) | `pandas`, `statsmodels` |
+| Exposure at default | Scheduled outstanding balance at the projected default month (amortisation) | `numpy` |
+| Reserve | Loan-level expected credit loss (PD × LGD × EAD) on the active book + PD stress + vintage backtest | `numpy` |
 
 ---
 
