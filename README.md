@@ -74,17 +74,17 @@ The ceiling is the point: at AUC ≈ 0.68 **consumer default is only partly pred
 
 ![Survival curves by grade](output/figures/kaplan_meier_by_grade.png)
 
-### 3. Loss given default — loss on the outstanding balance
+### 3. Loss given default — can we predict it?
 
-When a loan defaults the lender loses the **outstanding principal**, less whatever it recovers — the standard `loss = LGD × exposure-at-default`.
+When a loan defaults the lender loses the **outstanding principal**, less whatever it recovers (`loss = LGD × exposure-at-default`). The natural question is whether that loss severity can be modelled loan-by-loan, the way default probability is.
 
-**This isn't an assumption — it's measured from the loans that actually defaulted.** For each one: take the principal still owed when it stopped paying (what was borrowed, minus what had already been repaid), subtract whatever was later clawed back through collections — that's the loss. Across the ~269,000 charged-off loans, the lender got back only about **11 cents on the dollar** of the principal still owed, so **~89% is lost**. Because these loans are unsecured — there's no house or car to repossess — that recovery rate barely changes with the borrower's grade or how long the loan had been running:
+**It can't — and that's the finding.** A regression of LGD on *every* loan feature — grade, rate, FICO, income, term, even months-on-book — explains just **0.6%** of its variation, and no single feature reaches 0.2%. On an unsecured loan there's no collateral, so what gets recovered after default is essentially idiosyncratic; it doesn't track the borrower or the loan.
+
+So the honest estimate is simply the **observed average** — and that's a measured fact, not an assumption. For each defaulted loan, take the principal still owed when it stopped paying (borrowed minus repaid), subtract whatever was later clawed back through collections; that's the loss. Across the ~269,000 charged-off loans the lender got back only about **11 cents on the dollar**, so **LGD ≈ 89%** — and flat across grades:
 
 ![Loss given default on the outstanding balance](output/figures/lgd_outstanding.png)
 
-On an unsecured loan, once it defaults you lose almost all the remaining principal — whoever the borrower was and whenever it happens. So severity is a near-constant; what genuinely varies across the book is **how much is still owed**, the exposure, which falls as a loan amortises. The reserve therefore puts the timing where it belongs — in the exposure-at-default, not the loss rate.
-
-A regression confirms there's nothing to model: a fit of LGD on *every* loan feature explains just **0.6%** of its variation (and months-on-book — which drove the original loss-on-original measure — under 0.2%). Once loss is measured against what's actually still owed, the recovery rate is essentially unpredictable from anything we observe, so a flat ~89% is the honest representation — and at portfolio scale the loan-to-loan scatter diversifies away anyway.
+The timing effect you might expect in severity — a seasoned loan loses less — isn't gone; it lives in the **exposure**. How much is still owed falls as a loan amortises, so the reserve holds severity flat at ~89% and lets the outstanding balance carry the variation (and at portfolio scale the loan-to-loan scatter diversifies away).
 
 ### 4. The forward-looking reserve
 
