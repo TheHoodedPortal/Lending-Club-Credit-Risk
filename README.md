@@ -76,7 +76,9 @@ The ceiling is the point: at AUC ≈ 0.68 **consumer default is only partly pred
 
 ### 3. Loss given default — loss on the outstanding balance
 
-When a loan defaults the lender loses the **outstanding principal**, less whatever it recovers — the standard `loss = LGD × exposure-at-default`. Measured on charged-off loans (the unrecovered fraction of the principal still owed at default), **LGD is ~89% and essentially flat across grades** — only about 11% is recovered:
+When a loan defaults the lender loses the **outstanding principal**, less whatever it recovers — the standard `loss = LGD × exposure-at-default`.
+
+**This isn't an assumption — it's measured from the loans that actually defaulted.** For each one: take the principal still owed when it stopped paying (what was borrowed, minus what had already been repaid), subtract whatever was later clawed back through collections — that's the loss. Across the ~269,000 charged-off loans, the lender got back only about **11 cents on the dollar** of the principal still owed, so **~89% is lost**. Because these loans are unsecured — there's no house or car to repossess — that recovery rate barely changes with the borrower's grade or how long the loan had been running:
 
 ![Loss given default on the outstanding balance](output/figures/lgd_outstanding.png)
 
