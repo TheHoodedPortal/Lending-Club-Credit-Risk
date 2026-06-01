@@ -20,6 +20,7 @@ OUT.parent.mkdir(parents=True, exist_ok=True)
 COLS = [
     "loan_status", "issue_d", "last_pymnt_d", "installment",
     "loan_amnt", "funded_amnt", "out_prncp", "total_pymnt",
+    "total_rec_prncp", "recoveries",
     "int_rate", "grade", "sub_grade", "term", "dti",
     "fico_range_low", "fico_range_high", "annual_inc", "emp_length",
     "home_ownership", "purpose", "addr_state", "delinq_2yrs",

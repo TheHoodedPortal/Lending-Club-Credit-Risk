@@ -286,11 +286,11 @@
 
       <div class="metric">
         <div class="metric-head">
-          <span class="metric-name">Loss given default<span class="help" tabindex="0" role="note" aria-label="About LGD">?<span class="tooltip">Fraction of the outstanding balance lost if the loan defaults, evaluated at its projected default time. Loans that default later lose less (more principal repaid).</span></span></span>
+          <span class="metric-name">Loss given default<span class="help" tabindex="0" role="note" aria-label="About LGD">?<span class="tooltip">Fraction of the outstanding principal not recovered if the loan defaults — about 89% on unsecured loans (~11% recovery), roughly flat across the book.</span></span></span>
           <span class="metric-val" id="lgdVal">—</span>
         </div>
         <div class="bar-track"><div class="bar-fill" id="lgdBar" style="width:0%"></div></div>
-        <div class="metric-desc">At the projected default month · severity is driven by timing.</div>
+        <div class="metric-desc">Loss on the outstanding balance · ≈89%, flat across the book.</div>
       </div>
 
       <div class="el-box">
@@ -332,12 +332,12 @@
       </div>
       <div class="res-card">
         <div class="rc-lab">Expected reserve (base)</div>
-        <div class="rc-num">$582M</div>
-        <div class="rc-sub">6.1% of exposure, current conditions</div>
+        <div class="rc-num">$1,314M</div>
+        <div class="rc-sub">13.8% of outstanding, current conditions</div>
       </div>
       <div class="res-card accent">
         <div class="rc-lab">Reserve under stress</div>
-        <div class="rc-num" id="resStress">$582M</div>
+        <div class="rc-num" id="resStress">$1,314M</div>
         <div class="rc-sub" id="resStressSub">no stress applied</div>
       </div>
     </div>
@@ -351,7 +351,7 @@
   </div>
 
   <footer>
-    Predictions use this project's fitted models: a Cox survival model for remaining-life probability of default (conditioned on the loan's current age), an LGD model on the amortization drivers evaluated at the projected default time, and outstanding principal as exposure. The portfolio reserve is the loan-level expected credit loss across the active book; the stress slider scales every grade's default rate together.
+    Predictions use this project's fitted models: a Cox survival model for remaining-life probability of default (conditioned on the loan's current age), a flat ~89% loss-given-default on the outstanding balance (≈11% recovery), and the scheduled amortised balance at the projected default month as exposure-at-default. The portfolio reserve is the loan-level expected credit loss across the active book; the scenario buttons scale every grade's default rate together.
     <div class="disclaimer">For demonstration only. Trained on unsecured consumer loans (Lending Club, 2007–2018); no macroeconomic overlay; not a substitute for a lender's own provisioning.</div>
   </footer>
 </div>
@@ -378,21 +378,21 @@ const COX = {
     [66,0.5375],[67,0.49328],[68,0.47022],[69,0.44716],[70,0.43006],[71,0.41296],
     [72,0.39586]]
 };
-// LGD = f(months-on-book at default, term); timing is the real driver of severity
-const LGD = { const:0.627536, months:-0.021934, term:0.004498 };
+// LGD = loss on the outstanding balance — ~89% on unsecured loans (≈11% recovery), flat across grades
+const LGD_CONST = 0.891;
 const GRADE_RATE = {1:7.5, 2:11, 3:14, 4:18, 5:22, 6:26, 7:29};
 const GRADE_LETTER = {1:'A',2:'B',3:'C',4:'D',5:'E',6:'F',7:'G'};
 
 // Active-book ECL by grade ($M) at each downturn scenario — loan-level, from 04_reserve.ipynb
 const GLET = ['A','B','C','D','E','F','G'];
 const SCEN = [
-  { label:'Base',     mult:'current conditions',  total:582,  ecl:[58,117,176,140,63,20,8] },
-  { label:'Mild',     mult:'1.25× default rates',  total:696,  ecl:[71,140,210,168,75,24,9] },
-  { label:'Moderate', mult:'1.5× default rates',   total:805,  ecl:[83,163,243,195,86,25,9] },
-  { label:'Severe',   mult:'2× default rates',     total:1007, ecl:[109,209,310,249,96,25,9] },
-  { label:'Extreme',  mult:'2.5× default rates',   total:1185, ecl:[135,255,377,287,98,25,9] },
+  { label:'Base',     mult:'current conditions',  total:1314, ecl:[99,244,417,321,155,55,22] },
+  { label:'Mild',     mult:'1.25× default rates',  total:1589, ecl:[121,295,503,389,188,67,26] },
+  { label:'Moderate', mult:'1.5× default rates',   total:1852, ecl:[143,346,589,457,218,72,27] },
+  { label:'Severe',   mult:'2× default rates',     total:2338, ecl:[187,447,760,590,250,76,28] },
+  { label:'Extreme',  mult:'2.5× default rates',   total:2767, ecl:[231,549,932,687,262,78,28] },
 ];
-const EXPOSURE_TOTAL = 9480;     // $M
+const EXPOSURE_TOTAL = 9489;     // $M
 
 function sigmoid(z){ return 1/(1+Math.exp(-z)); }
 
@@ -438,18 +438,18 @@ function compute(){
     sPrev = sM;
   }
   const expMonth = den>1e-9 ? num/den : (age+T)/2;
-  const lgd = Math.max(0, Math.min(1, LGD.const + LGD.months*expMonth + LGD.term*T));
+  const lgd = LGD_CONST;
 
-  // outstanding balance via amortization at the loan's current age
-  const r = (state.int_rate/100)/12, n = T;
-  let bal;
+  // exposure-at-default = scheduled outstanding principal at the projected default month
+  const r = (state.int_rate/100)/12, n = T, m = Math.min(expMonth, n);
+  let ead;
   if (r > 1e-9){
     const f = Math.pow(1+r,n);
-    bal = state.loan_amnt * (f - Math.pow(1+r,age)) / (f - 1);
-  } else { bal = state.loan_amnt * (1 - age/n); }
-  bal = Math.max(0, bal);
+    ead = state.loan_amnt * (f - Math.pow(1+r,m)) / (f - 1);
+  } else { ead = state.loan_amnt * (1 - m/n); }
+  ead = Math.max(0, ead);
 
-  return { pd, lgd, el: pd*lgd*bal, bal, hr };
+  return { pd, lgd, el: pd*lgd*ead, bal: ead, hr };
 }
 
 function colorFor(pd){
@@ -578,7 +578,7 @@ function update(){
 
   document.getElementById('elVal').textContent='$'+el.toLocaleString(undefined,{maximumFractionDigits:0});
   document.getElementById('elDetail').textContent =
-    `On a $${Math.round(bal).toLocaleString()} balance: ${(pd*100).toFixed(1)}% remaining-life default chance × ${(lgd*100).toFixed(0)}% loss severity.`;
+    `On a $${Math.round(bal).toLocaleString()} exposure at default: ${(pd*100).toFixed(1)}% remaining-life default chance × ${(lgd*100).toFixed(0)}% loss severity.`;
 
   drawSurvival(hr);
 }
