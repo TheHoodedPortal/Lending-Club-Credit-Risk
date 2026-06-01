@@ -60,26 +60,6 @@ One caveat shapes everything downstream. Grouping loans by the quarter they were
 
 ![Delinquency by issue cohort and grade](output/figures/vintage_curves_by_grade.png)
 
-<details>
-<summary><b>Variable reference</b> — plain-language key for the model inputs (used in the charts below)</summary>
-
-| Variable | What it means |
-|---|---|
-| Loan grade | Lending Club's own A–G risk grade |
-| Interest rate | Annual interest rate set for the loan |
-| FICO score | Borrower's credit score at application |
-| Annual income | Borrower's stated yearly income |
-| Loan amount | Principal borrowed |
-| Loan term | Repayment length (36 or 60 months) |
-| Debt-to-income | Monthly debt payments ÷ monthly income |
-| Revolving utilisation | Share of the revolving credit limit in use |
-| Open accounts | Number of open credit lines |
-| Public derogatory records | Bankruptcies, liens, or judgments on record |
-| Delinquencies (2yr) | Past-due events in the last two years |
-| Months on book | How long the loan has been active — *post-origination*, so not known at application time |
-
-</details>
-
 ### 2. Stage 1 — How likely is default?
 
 **Setup.** A logistic regression predicts whether a loan will become delinquent, using **only information available when the loan is issued** (grade, interest rate, FICO, income, loan amount, DTI, term, and a few credit-history fields). It is trained on loans issued **2007–2017 and tested on the held-out 2018 vintage**, so the score is judged on loans it has never seen. On that test it reaches **AUC = 0.68** — solid for an application-time model.
