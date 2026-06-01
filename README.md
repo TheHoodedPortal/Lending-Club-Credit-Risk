@@ -84,6 +84,8 @@ When a loan defaults the lender loses the **outstanding principal**, less whatev
 
 On an unsecured loan, once it defaults you lose almost all the remaining principal — whoever the borrower was and whenever it happens. So severity is a near-constant; what genuinely varies across the book is **how much is still owed**, the exposure, which falls as a loan amortises. The reserve therefore puts the timing where it belongs — in the exposure-at-default, not the loss rate.
 
+A regression confirms there's nothing to model: a fit of LGD on *every* loan feature explains just **0.6%** of its variation (and months-on-book — which drove the original loss-on-original measure — under 0.2%). Once loss is measured against what's actually still owed, the recovery rate is essentially unpredictable from anything we observe, so a flat ~89% is the honest representation — and at portfolio scale the loan-to-loan scatter diversifies away anyway.
+
 ### 4. The forward-looking reserve
 
 Putting the pieces together on the **active book** — for every open loan, `remaining-life PD × LGD (≈89%) × exposure-at-default`, where exposure is the amortised balance projected to the loan's expected default month, summed:
