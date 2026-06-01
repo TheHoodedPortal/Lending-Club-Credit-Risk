@@ -493,36 +493,30 @@ bind('inc','annual_inc'); bind('amt','loan_amnt'); bind('dti','dti');
 function drawSurvival(hr){
   const W=720,H=300,padL=48,padR=20,padT=16,padB=34;
   const age=Math.min(state.age, state.term), T=state.term, Sa=survAt(age,hr);
-  // x-axis autoscales to the loan's remaining life: [current age, maturity]
-  const range=Math.max(T-age, 1);
-  const xs=m=>padL+((m-age)/range)*(W-padL-padR), ys=s=>padT+(1-s)*(H-padT-padB);
-  // conditional survival given the loan has already reached its current age:
-  // S(t)/S(age) — resets to 100% at "now" and declines forward to maturity.
+  // x-axis spans the whole term (0 → maturity), so the right-hand gap is gone.
+  const xs=m=>padL+(m/T)*(W-padL-padR), ys=s=>padT+(1-s)*(H-padT-padB);
+  // conditional survival given the loan has reached its current age: S(t)/S(age).
+  // Flat at 100% over the months it has already survived, then declines to maturity.
   const cond=t=>Math.min(survAt(t,hr)/Math.max(Sa,1e-9), 1);
   let svg='';
   for (let p=0;p<=1.0001;p+=0.25){ const y=ys(p);
     svg+=`<line class="gridline" x1="${padL}" y1="${y}" x2="${W-padR}" y2="${y}"/>`;
     svg+=`<text class="axislabel" x="${padL-8}" y="${y+3}" text-anchor="end">${(p*100).toFixed(0)}%</text>`; }
-  // adaptive month ticks across the remaining-life window
-  const step = range<=12 ? 3 : range<=24 ? 6 : 12;
-  const ticks=[]; for (let m=age; m<=T+0.001; m+=step) ticks.push(Math.round(m));
-  if (ticks[ticks.length-1]!==T) ticks.push(T);
-  ticks.forEach(m=>svg+=`<text class="axislabel" x="${xs(m)}" y="${H-padB+18}" text-anchor="middle">${m}</text>`);
+  for (let m=0;m<=T+0.001;m+=12) svg+=`<text class="axislabel" x="${xs(m)}" y="${H-padB+18}" text-anchor="middle">${m}</text>`;
   svg+=`<text class="axislabel" x="${(padL+W-padR)/2}" y="${H-2}" text-anchor="middle">Months on book</text>`;
-  // curve from current age to maturity, starting at 100%
-  let pts=[]; for (let m=age;m<=T;m++) pts.push([m, cond(m)]);
-  if (pts.length<2) pts=[[age,1],[T,cond(T)]];
+  // 100% from month 0 to "now", then the conditional decline to maturity
+  let pts=[]; for (let m=0;m<=T;m++) pts.push([m, m<=age ? 1 : cond(m)]);
   let d=pts.map((p,i)=>`${i?'L':'M'}${xs(p[0]).toFixed(1)},${ys(p[1]).toFixed(1)}`).join(' ');
-  svg+=`<path class="survarea" d="${d} L${xs(T)},${ys(0)} L${xs(age)},${ys(0)} Z"/>`;
+  svg+=`<path class="survarea" d="${d} L${xs(T)},${ys(0)} L${xs(0)},${ys(0)} Z"/>`;
   svg+=`<path class="survcurve" d="${d}"/>`;
   // markers: +12 mo, +24 mo from now, and at maturity (all capped at the term)
   [Math.min(age+12,T), Math.min(age+24,T), T].forEach(m=>{ const s=cond(m);
     svg+=`<line class="marker-line" x1="${xs(m)}" y1="${ys(s)}" x2="${xs(m)}" y2="${ys(0)}"/>`;
     svg+=`<circle class="marker-dot" cx="${xs(m)}" cy="${ys(s)}" r="3.5"/>`; });
-  // "now" marker at current age (curve = 100% here, at the left edge)
+  // "now" marker at current age
   const ax=xs(age);
   svg+=`<line class="now-line" x1="${ax}" y1="${padT}" x2="${ax}" y2="${H-padB}"/>`;
-  svg+=`<text class="marker-txt" x="${ax+3}" y="${padT-3}" text-anchor="start" fill="var(--red)">now</text>`;
+  svg+=`<text class="marker-txt" x="${ax}" y="${padT-3}" text-anchor="middle" fill="var(--red)">now</text>`;
   document.getElementById('survChart').innerHTML=svg;
   document.getElementById('surv12').textContent=(cond(Math.min(age+12,T))*100).toFixed(0)+'%';
   document.getElementById('surv36').textContent=(cond(Math.min(age+24,T))*100).toFixed(0)+'%';
