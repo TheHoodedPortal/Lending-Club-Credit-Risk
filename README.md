@@ -64,7 +64,7 @@ The book splits into **resolved loans** (Fully Paid / Charged Off / Default — 
 
 ### 2. Probability of default — and *when*
 
-**Discrimination (application-time).** A logistic regression predicts whether a loan will default using only information available at issue, trained on 2007–2017 and tested on the held-out 2018 vintage (**AUC = 0.68** — solid for consumer credit). More useful than the score is *what it learned*: each bar is the change in default probability for a one-standard-deviation increase in a factor, on a common footing. **Loan grade dominates; higher income and a better credit score are the strongest protective factors.**
+**Discrimination (application-time).** A logistic regression predicts whether a loan will default using only information available at issue, trained on 2007–2017 and tested on the held-out 2018 vintage (**AUC = 0.68** — solid for consumer credit). More useful than the score is *what it learned*: each bar is the change in default probability for a one-standard-deviation increase in a factor, on a common footing. **Loan grade dominates; higher income and a better credit score are the strongest protective factors.** (Functional form was checked with binned-residual plots: nonlinear terms — a log transform of income, a quadratic in debt-to-income — were tested but didn't change the out-of-time AUC, so the model is kept linear for simplicity.)
 
 ![What drives a borrower to default](output/figures/marginal_effects.png)
 
