@@ -1,194 +1,218 @@
-# Lending Club Credit Risk — Forward-Looking Loss Reserve
+# Lending Club Credit Risk: Forward-Looking Loss Reserve
 
-**How much should a lender set aside today for the losses its current loan book will eventually take?**
+How much should a lender set aside today for losses on loans that are still open?
 
-This project answers that question for a real book: 2.26 million Lending Club loans issued between 2007 and 2018. Models trained on the loans whose outcomes are already known score the 911,000 loans still open, and the result is a dollar reserve for the live book — backtested against what actually happened.
+This project estimates that reserve for Lending Club's 2007-2018 consumer-loan book. It cleans 2.26 million loans, learns from loans that have already resolved, then scores the 911,000 loans still open as of the March 2019 servicing snapshot.
 
-**[Try the live dashboard →](https://thehoodedportal.github.io/Lending-Club-Credit-Risk/)** Score any loan profile and stress the whole reserve, right in the browser. Described in [its own section](#the-interactive-dashboard) below.
+The result is a loan-level expected credit loss model, a backtest by vintage, and a single-file browser dashboard.
 
----
+[Try the live dashboard](https://thehoodedportal.github.io/Lending-Club-Credit-Risk/)
 
-## The question
+## Headline Result
 
-A lender holding a book of loans needs to know, *today*, how much to reserve for the losses that book will take over its remaining life. Reserve too little and a downturn threatens solvency. Reserve too much and capital sits idle.
+| Measure | Result |
+|---|---:|
+| Open loans | 911,000 |
+| Outstanding principal | $9.5B |
+| Base expected credit loss | $1.02B |
+| Base reserve rate | 10.7% of outstanding |
+| Reserve if default rates double | $1.65B |
+| Stressed reserve rate | 17.4% of outstanding |
 
-The standard framework (IFRS 9 / CECL) is **expected credit loss**:
+The base reserve is not a worst-case number. It is the model's current-condition estimate. The stress range is more useful for planning because consumer credit losses move together in downturns.
 
+## What The Model Estimates
+
+The reserve follows the expected-credit-loss framework:
+
+```text
+expected loss = probability of default × loss given default × exposure at default
 ```
-Expected loss = probability of default × loss given default × exposure at default
-```
 
-That breaks the problem into three questions:
+That means each open loan needs three estimates:
 
-1. **How likely is each open loan to default over its remaining life?** (probability of default, PD)
-2. **If it defaults, what share of the money is lost?** (loss given default, LGD)
-3. **How much will be at stake when it happens?** (exposure at default)
+| Component | Meaning | How this project estimates it |
+|---|---|---|
+| Probability of default (PD) | Chance the loan defaults over its remaining life | Cox survival models, conditioned on the loan's current age |
+| Loss given default (LGD) | Share of the outstanding balance lost after default | Observed average loss on charged-off loans |
+| Exposure at default (EAD) | Balance expected to remain if default occurs | Actual current balance rolled forward on the amortization schedule |
 
-Answer all three for every open loan, sum it up, and you have the reserve.
+The key rule is that a loan is scored only with information available at the scoring date. Outcomes are used to train and validate the model, not as predictors for open loans.
 
-One discipline applies throughout: a model scoring a loan today may only use information known today. Outcomes train the models — they never leak into a prediction.
+## Data Setup
 
-## The answer
+The raw data is Lending Club's accepted-loans file, `accepted_2007_to_2018Q4.csv`. The servicing fields run through March 2019, so the project uses `2019-03-01` as the snapshot date.
 
-| | |
-|---|---|
-| Open loans on the book | 911,000 loans, **$9.5B** still owed |
-| Expected credit loss — the reserve | **$1.02B** (10.7% of outstanding) |
-| The same reserve if default rates double | **$1.65B** (17.4%) |
+A loan is treated as seriously delinquent if its status is:
 
-The reserve is model-driven and backtested: on past loan cohorts that have fully played out under normal conditions, the predicted loss rate lands within about a point of what actually happened ([section 5](#5-does-it-hold-up-a-backtest)).
+- `Late (31-120 days)`
+- `Default`
+- `Charged Off`
+- `Does not meet the credit policy. Status:Charged Off`
 
----
-
-## The analysis, step by step
-
-### 1. The data, and what "delinquent" means
-
-Every loan carries a Lending Club **grade from A (safest) to G (riskiest)** — the lender's own risk score, set before issue. It is the strongest single signal in the data.
-
-A loan is labelled **delinquent** if its status is `Late (31–120 days)`, `Default`, or `Charged Off` — the closest the data comes to a serious, cash-flow-interrupting delinquency. By that definition **12.9%** of loans go bad, climbing steeply with grade: **3.6% of Grade A loans, 40.0% of Grade G.**
+By that definition, 12.9% of all loans become delinquent. Risk rises sharply by Lending Club grade, from Grade A to Grade G.
 
 ![Delinquency rate by loan grade](output/figures/delinquency_by_grade.png)
 
-The book then splits in two. **Resolved loans** (fully paid or charged off) have known outcomes — they are what the models learn from. **Active loans** (current, in grace, or late) are still open — they are the book the reserve is for. The models also use the active loans' history so far: they know those loans haven't defaulted *yet*, without pretending to know how they end.
+The data is split into two working groups:
 
-One trap in this data is worth naming early. Recent loans look deceptively safe simply because they haven't had time to go bad yet — *maturation bias*. The cohort curves below show every vintage's delinquency climbing as it ages, with the 2007–08 crisis cohorts standing well above the rest. Both the forward-looking method and the backtest have to account for this.
+- **Resolved loans:** fully paid, charged off, or defaulted loans with known outcomes. These form the training history.
+- **Active loans:** current, grace-period, or late loans still open at the snapshot. These are the loans being reserved against.
+
+Recent loans can look artificially safe because they have not had enough time to fail. The model handles that by using survival analysis rather than treating every current loan as permanently good.
 
 ![Delinquency by issue cohort and grade](output/figures/vintage_curves_by_grade.png)
 
-### 2. Will a loan default — and when?
+## Default Risk
 
-**First, what separates good borrowers from bad.** A logistic regression predicts default from information available at issue. To keep the labels honest, it is trained and tested only on **matured loans** — loans whose full term had already run out, so every label is a final outcome rather than a loan that is merely "good so far." Trained on matured loans issued through 2014 and tested on the matured 2015 cohort, the model scores **AUC = 0.68**.
+The project uses two views of default risk.
 
-More interesting than the score is what the model learned. The chart puts every factor on a common footing — each point is the change in default probability from a one-standard-deviation increase in that factor:
+First, a logistic regression explains which application-time features separate safer borrowers from riskier borrowers. It is trained only on matured loans, so each training label is a final outcome rather than a loan that is merely current so far. The out-of-time AUC on the matured 2015 cohort is 0.68.
 
 ![What drives a borrower to default](output/figures/marginal_effects.png)
 
-**The price of risk leads.** The interest rate — the lender's own all-in pricing of the borrower — and the grade behind it carry the most signal. Higher income and a better credit score are the strongest protective factors. Read those top two bars together rather than as separate findings: rate and grade are about 0.95 correlated (the lender sets the rate *from* the grade), so they're really a single "price of risk" signal the regression has split across two bars — which is also why their relative heights aren't worth over-interpreting. (Nonlinear versions of income and debt-to-income were tested and didn't improve the AUC, so the model stays linear.)
+The strongest signals are the lender's own pricing and grade, followed by borrower income and credit score. Interest rate and grade should be read together: they are highly correlated because the rate is largely set from the grade.
 
-The 0.68 itself is worth pausing on: consumer default is only **partly predictable**, because its strongest triggers — job loss, illness, divorce — appear in no loan application. That irreducible uncertainty is the reason reserves exist.
-
-**Second, the timing.** Whether a loan defaults isn't enough — the reserve needs to know *when* the risk sits. A survival model (Cox proportional hazards) tracks how default risk unfolds month by month over a loan's life. Grade A loans stay healthy for years; nearly half of Grade G loans stop paying within five years.
+Second, the reserve needs timing, not just a lifetime yes/no probability. A Cox survival model estimates month-by-month default risk. A second Cox model estimates early payoff, because a loan that prepays can no longer default. The reserve walks both hazards forward together as competing risks.
 
 ![Survival curves by grade](output/figures/kaplan_meier_by_grade.png)
 
-Two details make this model the engine of the reserve:
+This lets the model score a loan from where it is today. A loan that has already survived 20 months is not treated like a brand-new loan; the model prices only the remaining term.
 
-- **It can start the clock today.** For a loan that is already 20 months old, the model conditions on the fact that it has survived those 20 months and prices only the road ahead. Nothing about the future is assumed — only the loan's age today.
-- **Default and early payoff compete.** Many borrowers pay their loans off early, and a loan that has been paid off can never default. The reserve therefore fits *two* hazards — one for default, one for payoff — and walks them forward together. Skipping this is a common shortcut, and it quietly overstates default risk; the backtest in section 5 shows by how much.
+## Loss Severity
 
-### 3. When a loan defaults, how much is lost?
+For charged-off loans, loss is measured on the outstanding principal at default:
 
-The loss on a defaulted loan is the principal still owed, minus whatever collections later claw back. The natural question: can that severity be predicted loan by loan, the way default probability can?
+```text
+LGD = (principal still owed - recoveries) / principal still owed
+```
 
-**It can't — and that's the finding.** Regressing loss severity on every loan feature — grade, rate, FICO, income, term, even months on book — explains just **0.6%** of its variation, and no single feature explains even 0.2%. There is no collateral behind an unsecured loan, so what comes back after a default is essentially luck. It doesn't track the borrower.
+Severity is not meaningfully predictable from the available borrower or loan features. A regression on grade, rate, FICO, income, term, and other fields explains less than 1% of LGD variation.
 
-The honest estimate is therefore the observed average — a measured fact, not an assumption. Across roughly 269,000 charged-off loans, the lender recovered about **11 cents per dollar owed**. Loss given default is **~89%**, and it is nearly identical in every grade:
+The project therefore uses the observed average: Lending Club recovered about 11 cents per dollar owed, so LGD is about 89%.
 
 ![Loss given default on the outstanding balance](output/figures/lgd_outstanding.png)
 
-The timing effect you might expect in severity — *a seasoned loan loses less* — isn't missing. It lives in the exposure instead: what falls as a loan ages is not the loss **rate** but the **balance left to lose**. So the reserve holds severity flat at 89% and lets the amortising balance do that work.
+The fact that older loans usually lose fewer dollars is handled through EAD, not LGD. As a loan amortizes, there is less balance left to lose.
 
-### 4. The reserve on today's book
+## Reserve Calculation
 
-Now everything is applied to the 911,000 open loans. Each one is walked forward, month by month, from its current age to its maturity. In any month it does one of three things — defaults, pays off early, or survives to the next month — with probabilities from the survival models. If it defaults in a given month, the loss is 89% of the balance it would still owe that month, starting from its actual balance today. Summing the probability-weighted losses across every month and every loan gives the reserve:
+For each active loan, the model starts from its current age and current outstanding balance. Each future month has three possible outcomes:
+
+- the loan defaults,
+- the loan prepays,
+- or the loan survives to the next month.
+
+If default happens in a month, the loss is the LGD multiplied by the balance expected to remain in that month. Summing those probability-weighted losses across all months and all active loans gives the reserve.
 
 ![Forward-looking ECL by grade](output/figures/ecl_by_grade.png)
 
-**$1.02B against $9.5B outstanding — 10.7%.** Grade C carries the largest share ($324M), not because it is the riskiest grade but because there is so much of it. Concentration matters as much as rate. One deliberate conservatism: loans already 31–120 days late are reserved in full, as if default were certain. Some of those loans actually cure, so this padding leans the reserve safe.
+Base result: **$1.02B** expected credit loss on **$9.5B** outstanding, or **10.7%** of the active book. Grade C contributes the largest dollar loss because it has the most outstanding balance, not because it is the riskiest grade.
 
-**A bad year is systemic, not random.** With 900,000 loans, the luck of individual defaults averages out almost completely — simulating the book with independent defaults barely moves the 95th percentile off the mean. What actually threatens the reserve is a downturn lifting *everyone's* default rate at once. So the stress test scales default probabilities across the whole book:
+Loans already `Late (31-120 days)` are reserved in full as a conservative assumption.
+
+## Stress Scenarios
+
+The stress test scales monthly default probabilities inside the competing-risk walk. That means stressed scenarios change both the chance of default and the expected timing of default.
 
 ![Reserve under systemic stress](output/figures/ecl_stress.png)
 
 | Scenario | Reserve | % of outstanding |
-|---|---|---|
-| Base (current conditions) | $1,015M | 10.7% |
-| Mild stress (+25% PD) | $1,187M | 12.5% |
-| Moderate stress (+50% PD) | $1,350M | 14.2% |
-| Severe (2× PD) | $1,653M | 17.4% |
+|---|---:|---:|
+| Base | $1,015M | 10.7% |
+| Mild stress (+25% default risk) | $1,187M | 12.5% |
+| Moderate stress (+50% default risk) | $1,350M | 14.2% |
+| Severe stress (2x default risk) | $1,653M | 17.4% |
+| Extreme stress (2.5x default risk) | $1,930M | 20.3% |
 
-### 5. Does it hold up? A backtest
+With roughly 900,000 loans, individual borrower randomness mostly diversifies away. The bigger risk is systemic: an economy-wide shock that lifts default rates across the book at the same time.
 
-The honest test: refit everything — survival models and loss severity — using only loans issued through 2014, predict each issue-year cohort's lifetime loss rate from day one, and compare against what those loans actually went on to lose.
+## Backtest
+
+The backtest refits the survival models and LGD using only loans issued through 2014. It then predicts lifetime loss rates by issue year and compares those predictions with realized losses.
 
 ![Backtest: predicted vs realized loss by vintage](output/figures/ecl_backtest.png)
 
-Three things to read off the chart:
+The model is reasonably calibrated in normal, fully seasoned years. The 2010-2014 cohorts are within about one percentage point of realized losses. It underpredicts the 2007-2008 crisis cohorts because there is no macroeconomic input, and it modestly underpredicts 2015-2016, when loan performance worsened beyond what the application fields suggested.
 
-- **On normal, fully-played-out years the prediction sits on top of reality.** The 2010–2014 cohorts land within about a point (2011: predicted 9.3% vs actual 10.2%; 2014: 10.1% vs 10.3%). The first cohorts past the training cutoff, 2015–16, come in modestly under (9.5% vs 11.2%, and 9.3% vs 10.8%) — those loans performed worse than their paperwork suggested, a known episode of loosening underwriting that no loan-level feature captures.
-- **The 2007–08 crisis years are under-predicted.** The model has no macroeconomic input, so it cannot see a recession coming. This is the strongest argument for holding a stressed reserve, not the base one, when conditions look threatening.
-- **The newest cohorts show predicted above actual** simply because those loans haven't had time to default yet.
+That is the central lesson of the backtest: loan-level features can estimate normal-condition losses, but stress overlays are needed for the credit cycle and underwriting shifts.
 
-A methodological note: an earlier version of this model, without the competing payoff hazard, over-predicted *every* matured year by 2–4 points. Treating prepayment properly is what centred the calibration.
+## Interactive Dashboard
 
-The takeaway: loan-level features get the level right in normal times, and the things they cannot see — the cycle, a badly underwritten cohort — are exactly what the stress range is for.
+The dashboard is [`index.html`](index.html), also published here:
 
----
+[https://thehoodedportal.github.io/Lending-Club-Credit-Risk/](https://thehoodedportal.github.io/Lending-Club-Credit-Risk/)
 
-## The interactive dashboard
+It lets you:
 
-Everything above is wrapped in a single-file dashboard: [`index.html`](index.html), [live here](https://thehoodedportal.github.io/Lending-Club-Credit-Risk/). The fitted models are baked into the page — no server, no install.
+- score an example borrower profile,
+- see remaining-life default probability,
+- estimate exposure and expected loss,
+- view the survival curve,
+- and switch between portfolio stress scenarios.
 
-Set a borrower's profile and months on book, and it returns the remaining-life default probability (with a rank against the live book), the expected exposure at default, the expected loss, and a survival curve showing when the risk sits. A second panel holds the whole-book reserve and lets you flip through the downturn scenarios.
+The dashboard uses the model payload exported by `python/04_reserve.ipynb` to `output/dashboard_model.json`. `python/05_sync_dashboard.py` embeds that payload into `index.html` so the dashboard stays tied to the latest fitted model.
 
----
+## Project Layout
 
-## Method summary
-
-| Step | What's done | Library |
-|---|---|---|
-| Data prep | 2.26M rows: parse, clean, compute loan age, flag resolved vs active | `pandas`, `numpy` |
-| Exploration | Distributions, correlations, vintage curves | `matplotlib`, `seaborn` |
-| PD — drivers | Logistic regression on application-time features; matured loans only, temporal train/test split | `scikit-learn`, `statsmodels` |
-| PD — timing | Two Cox hazards — default and early payoff — walked forward monthly as competing risks | `lifelines` |
-| LGD | Measured 89% loss on outstanding principal; regression confirms it is unpredictable (R² < 1%) | `pandas`, `statsmodels` |
-| Exposure | Each loan's actual balance rolled forward on its amortisation schedule, weighted across possible default months | `numpy` |
-| Reserve | Per-loan expected loss summed over the active book, plus systemic PD stress and the vintage backtest | `numpy` |
-
----
-
-## Repository and running it
-
-```
-├── index.html            ← interactive dashboard (live demo)
+```text
+.
+├── index.html                       # single-file interactive dashboard
 ├── data/
-│   ├── raw/              ← original CSV (not tracked — too large for GitHub)
-│   └── processed/        ← cleaned data (generated by 00_ingest.py, not tracked)
+│   ├── raw/                         # raw Lending Club CSV, not tracked
+│   └── processed/                   # generated parquet, not tracked
+├── output/
+│   ├── dashboard_model.json         # dashboard model payload
+│   └── figures/                     # generated charts used in this README
 ├── python/
-│   ├── 00_ingest.py      ← load and clean; add loan age + resolved/active flag
-│   ├── 01_eda.ipynb      ← explore the loans
-│   ├── 02_cohort.ipynb   ← vintage analysis over time
-│   ├── 03_models.ipynb   ← PD (logistic + survival) and LGD models
-│   ├── 04_reserve.ipynb  ← forward-looking ECL on the active book + backtest
+│   ├── 00_ingest.py                 # load, clean, snapshot, feature engineering
+│   ├── 01_eda.ipynb                 # exploratory charts
+│   ├── 02_cohort.ipynb              # vintage and cohort analysis
+│   ├── 03_models.ipynb              # default drivers, survival, LGD
+│   ├── 04_reserve.ipynb             # reserve, stress scenarios, backtest, export
+│   ├── 05_sync_dashboard.py         # embed dashboard_model.json into index.html
 │   └── requirements.txt
-├── output/figures/       ← charts
 └── README.md
 ```
 
+## Running The Project
+
+Install dependencies:
+
 ```bash
 pip install -r python/requirements.txt
-# download the Lending Club CSV from Kaggle into data/raw/, then from the project root:
+```
+
+Download the Lending Club CSV from Kaggle and place it here:
+
+```text
+data/raw/accepted_2007_to_2018Q4.csv
+```
+
+Then run:
+
+```bash
 python python/00_ingest.py
 jupyter notebook python/
-# after refitting 04_reserve.ipynb, refresh the embedded dashboard payload:
+```
+
+Run the notebooks in order. After rerunning `04_reserve.ipynb`, refresh the dashboard payload:
+
+```bash
 python python/05_sync_dashboard.py
 ```
 
-Requires Python 3.10+. The raw CSV (`accepted_2007_to_2018Q4.csv`, ~1.7GB) is not tracked — download it from [Kaggle](https://www.kaggle.com/datasets/wordsforthewise/lending-club) into `data/raw/` first.
-
----
+The raw CSV is about 1.7GB and is not tracked. The cleaned parquet is generated by `00_ingest.py` and is also not tracked.
 
 ## Caveats
 
-- **This is one lender's unsecured consumer loans.** The method transfers to other credit; the specific numbers don't.
-- **There is no macroeconomic variable.** The model prices loans, not the economy, so it cannot anticipate a recession — the backtest shows it missing 2007–08. A production reserve would overlay a macro scenario on top; here, the stress scenarios stand in for that judgement.
-- **There is no vintage-quality variable.** Cohorts underwritten more loosely than their features show (2015–16) come in 1–2 points under-predicted. The stress range absorbs this too.
-- **The reserve rests on stated choices.** Severity is held flat at 89%, ignoring collection costs and the time value of recoveries — true severity is, if anything, a touch higher. Exposure assumes scheduled amortisation from each loan's actual balance. Loans 31–120 days late are reserved in full. Default and payoff risks are assumed to share nothing beyond the loan's features. The honest output is the stress range, not any single number.
-- **Default is partly unpredictable.** Job loss, illness, divorce — no application data contains them. That is not a flaw in the model; it is the reason reserves exist.
+- The data is from one unsecured consumer lender. The method transfers better than the exact numbers.
+- There is no macroeconomic forecast. The stress scenarios stand in for recession or cycle effects.
+- There is no explicit vintage-quality variable. If a cohort is underwritten worse than its application fields imply, the model can miss that.
+- LGD is held flat at about 89%. This is supported by the data, but it ignores collection costs and the time value of recoveries.
+- Loans already `Late (31-120 days)` are reserved in full. That is conservative because some late loans cure.
+- The result should be read as a reserve range, not a single certain number.
 
----
+## Data Source
 
-## Data source
-
-[Lending Club Loan Data — Kaggle](https://www.kaggle.com/datasets/wordsforthewise/lending-club) · `accepted_2007_to_2018Q4.csv` (2.26M loans, 151 columns)
+[Lending Club Loan Data on Kaggle](https://www.kaggle.com/datasets/wordsforthewise/lending-club): `accepted_2007_to_2018Q4.csv`
