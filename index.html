@@ -277,7 +277,7 @@
 
       <div class="metric">
         <div class="metric-head">
-          <span class="metric-name">Remaining-life PD<span class="help" tabindex="0" role="note" aria-label="About remaining-life PD">?<span class="tooltip">Probability the loan defaults over its remaining term, given it has already survived to its current age. From the Cox survival model.</span></span></span>
+          <span class="metric-name">Remaining-life PD<span class="help" tabindex="0" role="note" aria-label="About remaining-life PD">?<span class="tooltip">Probability the loan defaults over its remaining term, given it has already survived to its current age. From the competing-risks survival model — default and early payoff compete, since a loan that prepays can no longer default.</span></span></span>
           <span class="metric-val" id="pdVal">—</span>
         </div>
         <div class="bar-track"><div class="bar-fill" id="pdBar" style="width:0%"></div></div>
@@ -287,11 +287,11 @@
 
       <div class="metric">
         <div class="metric-head">
-          <span class="metric-name">Exposure at default<span class="help" tabindex="0" role="note" aria-label="About exposure at default">?<span class="tooltip">Principal still owed at the loan's projected default month (scheduled amortisation) — the base the loss applies to. It shrinks as the loan ages. Expected loss is ~89% of this (recovery on unsecured loans is low).</span></span></span>
+          <span class="metric-name">Exposure at default<span class="help" tabindex="0" role="note" aria-label="About exposure at default">?<span class="tooltip">Expected principal still owed if the loan defaults — the scheduled balance at each possible default month, weighted by that month's default probability. It shrinks as the loan ages. Expected loss is ~89% of this (recovery on unsecured loans is low).</span></span></span>
           <span class="metric-val" id="eadVal">—</span>
         </div>
         <div class="bar-track"><div class="bar-fill" id="eadBar" style="width:0%"></div></div>
-        <div class="metric-desc">Principal still owed when it defaults (projected) · loss severity ≈ 89%.</div>
+        <div class="metric-desc">Expected principal owed if it defaults (probability-weighted) · loss severity ≈ 89%.</div>
       </div>
 
       <div class="el-box">
@@ -306,7 +306,7 @@
     <div class="surv-head">
       <div>
         <h2>How long will this loan stay healthy?</h2>
-        <p class="note" style="margin-bottom:0;">Probability the loan stays healthy from <em>today</em> onward, given it has already survived to its current age (the red "now" line) · Cox proportional-hazards model. The drop from now to maturity is the remaining-life PD.</p>
+        <p class="note" style="margin-bottom:0;">Probability the loan avoids default from <em>today</em> onward, given it has already survived to its current age (the red "now" line) · competing-risks Cox model — paying off early counts as staying healthy. The drop from now to maturity is the remaining-life PD.</p>
       </div>
       <div class="surv-stats">
         <div class="surv-stat"><div class="s-num" id="surv12">—</div><div class="s-lab">+12 mo</div></div>
@@ -333,12 +333,12 @@
       </div>
       <div class="res-card">
         <div class="rc-lab">Expected reserve (base)</div>
-        <div class="rc-num">$1,272M</div>
-        <div class="rc-sub">13.4% of outstanding, current conditions</div>
+        <div class="rc-num">$1,038M</div>
+        <div class="rc-sub">10.9% of outstanding, current conditions</div>
       </div>
       <div class="res-card accent">
         <div class="rc-lab">Reserve under stress</div>
-        <div class="rc-num" id="resStress">$1,272M</div>
+        <div class="rc-num" id="resStress">$1,038M</div>
         <div class="rc-sub" id="resStressSub">no stress applied</div>
       </div>
     </div>
@@ -352,16 +352,18 @@
   </div>
 
   <footer>
-    Predictions use this project's fitted models: a Cox survival model for remaining-life probability of default (conditioned on the loan's current age), a flat ~89% loss-given-default on the outstanding balance (≈11% recovery), and the scheduled amortised balance at the projected default month as exposure-at-default. The portfolio reserve is the loan-level expected credit loss across the active book, anchored to each loan's actual outstanding balance; the scenario buttons scale every grade's default rate together.
+    Predictions use this project's fitted models: two cause-specific Cox hazards — default and early payoff — walked forward month by month for the remaining-life probability of default (competing risks, conditioned on the loan's current age), a flat ~89% loss-given-default on the outstanding balance (≈11% recovery), and the amortising balance weighted across possible default months as exposure-at-default. The portfolio reserve is the loan-level expected credit loss across the active book, anchored to each loan's actual outstanding balance; the scenario buttons scale every grade's default rate together.
     <div class="disclaimer">For demonstration only. Trained on unsecured consumer loans (Lending Club, 2007–2018); no macroeconomic overlay; not a substitute for a lender's own provisioning.</div>
   </footer>
 </div>
 
 <script>
-// ── Cox survival model (remaining-life PD) ───────────────────────────────────
+// ── Competing-risks Cox models (remaining-life PD) ───────────────────────────
+// Two cause-specific hazards: COXD = default, COXP = early payoff. A loan that
+// prepays can no longer default, so PD walks both risks forward month by month.
 // Exact values printed by the export cell at the end of 04_reserve.ipynb —
-// keep in sync with the notebook if the model is refit.
-const COX = {
+// keep in sync with the notebook if the models are refit.
+const COXD = {
   coef: { int_rate:7.705776883155778, dti:0.001529026327581638,
           fico:-0.0028990155000504316, annual_inc:-1.010828915096618e-6,
           grade_num:0.12058509774161612, term:-0.005068520405475906 },
@@ -379,6 +381,24 @@ const COX = {
     [54,0.72495],[55,0.72157],[56,0.71902],[57,0.71672],[58,0.71618],[59,0.71369],
     [60,0.71219]]
 };
+const COXP = {
+  coef: { int_rate:4.693107612412343, dti:-0.007789828128268262,
+          fico:0.0027653063096848333, annual_inc:2.3146468358264514e-7,
+          grade_num:-0.10595785290458479, term:-0.048245623181646984 },
+  means: { int_rate:0.13088154866666665, dti:18.8847558, fico:700.5909433333334,
+           annual_inc:78031.4488374, grade_num:2.663473333333333, term:42.89744 },
+  base: [[0,0.99652],[1,0.98703],[2,0.98075],[3,0.97638],[4,0.96856],[5,0.95893],
+    [6,0.94962],[7,0.93297],[8,0.92259],[9,0.91069],[10,0.89836],[11,0.8876],
+    [12,0.86784],[13,0.86387],[14,0.8483],[15,0.83302],[16,0.81125],[17,0.79783],
+    [18,0.78195],[19,0.76846],[20,0.75373],[21,0.72897],[22,0.71306],[23,0.69687],
+    [24,0.68183],[25,0.66697],[26,0.64972],[27,0.63358],[28,0.6175],[29,0.59972],
+    [30,0.57658],[31,0.55774],[32,0.54205],[33,0.52456],[34,0.50495],[35,0.47403],
+    [36,0.38279],[37,0.26647],[38,0.17784],[39,0.15771],[40,0.14787],[41,0.14077],
+    [42,0.13073],[43,0.12355],[44,0.11642],[45,0.10977],[46,0.10421],[47,0.09571],
+    [48,0.08978],[49,0.08554],[50,0.07773],[51,0.07328],[52,0.06763],[53,0.06215],
+    [54,0.05701],[55,0.05211],[56,0.04841],[57,0.04352],[58,0.03943],[59,0.03596],
+    [60,0.02912]]
+};
 // LGD = loss on the outstanding balance — ~89% on unsecured loans (≈11% recovery), flat across grades
 const LGD_CONST = 0.891;
 const GRADE_RATE = {1:7.5, 2:11, 3:14, 4:18, 5:22, 6:26, 7:29};
@@ -387,17 +407,17 @@ const GRADE_LETTER = {1:'A',2:'B',3:'C',4:'D',5:'E',6:'F',7:'G'};
 // Active-book ECL by grade ($M) at each downturn scenario — loan-level, from 04_reserve.ipynb
 const GLET = ['A','B','C','D','E','F','G'];
 const SCEN = [
-  { label:'Base',     mult:'current conditions',  total:1272, ecl:[94,235,404,312,151,54,21] },
-  { label:'Mild',     mult:'1.25× default rates',  total:1534, ecl:[114,283,486,378,183,65,25] },
-  { label:'Moderate', mult:'1.5× default rates',   total:1785, ecl:[135,332,569,443,212,70,26] },
-  { label:'Severe',   mult:'2× default rates',     total:2249, ecl:[176,428,733,570,242,73,27] },
-  { label:'Extreme',  mult:'2.5× default rates',   total:2657, ecl:[217,524,897,663,253,76,27] },
+  { label:'Base',     mult:'current conditions',  total:1038, ecl:[77,195,332,253,120,43,17] },
+  { label:'Mild',     mult:'1.25× default rates',  total:1244, ecl:[93,233,397,304,144,52,21] },
+  { label:'Moderate', mult:'1.5× default rates',   total:1448, ecl:[110,271,461,354,168,61,24] },
+  { label:'Severe',   mult:'2× default rates',     total:1844, ecl:[142,347,589,455,214,71,27] },
+  { label:'Extreme',  mult:'2.5× default rates',   total:2214, ecl:[175,423,717,555,242,74,28] },
 ];
 const EXPOSURE_TOTAL = 9489;     // $M
 
 // Remaining-life PD percentiles across the active book (0,5,...,100) — for the benchmark
-const REM_PD_PCT = [0.0000,0.0295,0.0480,0.0620,0.0735,0.0836,0.0933,0.1029,0.1131,
-  0.1250,0.1387,0.1530,0.1679,0.1858,0.2086,0.2334,0.2616,0.3035,0.3735,0.5166,1.0000];
+const REM_PD_PCT = [0.0000,0.0255,0.0382,0.0474,0.0550,0.0620,0.0687,0.0757,0.0830,
+  0.0913,0.1006,0.1104,0.1208,0.1332,0.1487,0.1660,0.1861,0.2174,0.2645,0.3670,1.0000];
 function pdPercentile(pd){
   if (pd<=REM_PD_PCT[0]) return 0;
   if (pd>=REM_PD_PCT[REM_PD_PCT.length-1]) return 100;
@@ -407,12 +427,10 @@ function pdPercentile(pd){
   return 100;
 }
 
-function sigmoid(z){ return 1/(1+Math.exp(-z)); }
-
-// interpolate baseline survival S0 at month t, then S = S0^hr
-function s0(t){
-  const b = COX.base;
-  if (t <= 0) return 1;
+// interpolate a model's baseline survival S0 at month t, then S = S0^hr
+function s0(model, t){
+  const b = model.base;
+  if (t <= 0) return b[0][1];
   for (let i=0;i<b.length;i++){
     if (b[i][0] >= t){
       if (i===0) return b[0][1];
@@ -426,43 +444,48 @@ function s0(t){
 let state = { grade_num:3, int_rate:14, age:0, fico:690, annual_inc:65000,
               loan_amnt:15000, dti:18, term:36 };
 
-function partialHazard(){
+function partialHazard(model){
   const x = { int_rate: state.int_rate/100, dti: state.dti, fico: state.fico,
               annual_inc: state.annual_inc, grade_num: state.grade_num, term: state.term };
   let lp = 0;
-  for (const k in COX.coef) lp += COX.coef[k]*(x[k]-COX.means[k]);
+  for (const k in model.coef) lp += model.coef[k]*(x[k]-model.means[k]);
   return Math.exp(lp);
 }
 
-function survAt(t, hr){ return Math.pow(s0(t), hr); }
+function survAt(model, t, hr){ return Math.pow(s0(model, t), hr); }
 
-function compute(){
-  const hr = partialHazard();
-  const age = Math.min(state.age, state.term);
-  const T = state.term;
-  const Sa = survAt(age, hr), ST = survAt(T, hr);
-  let pd = age >= T ? 0 : Math.max(0, Math.min(1, 1 - ST/Math.max(Sa,1e-9)));
-
-  // expected default month, conditional on defaulting in (age, T]
-  let num=0, den=0, sPrev=survAt(0,hr);
-  for (let m=1;m<=72;m++){
-    const sM = survAt(m,hr), dP = Math.max(0, sPrev-sM);
-    if (m>age && m<=T){ num += m*dP; den += dP; }
-    sPrev = sM;
-  }
-  const expMonth = den>1e-9 ? num/den : (age+T)/2;
-  const lgd = LGD_CONST;
-
-  // exposure-at-default = scheduled outstanding principal at the projected default month
-  const r = (state.int_rate/100)/12, n = T, m = Math.min(expMonth, n);
-  let ead;
+// scheduled outstanding principal at month m
+function schedBal(m){
+  const r = (state.int_rate/100)/12, n = state.term, mm = Math.min(m, n);
   if (r > 1e-9){
-    const f = Math.pow(1+r,n);
-    ead = state.loan_amnt * (f - Math.pow(1+r,m)) / (f - 1);
-  } else { ead = state.loan_amnt * (1 - m/n); }
-  ead = Math.max(0, ead);
+    const f = Math.pow(1+r, n);
+    return Math.max(0, state.loan_amnt*(f - Math.pow(1+r, mm))/(f - 1));
+  }
+  return Math.max(0, state.loan_amnt*(1 - mm/n));
+}
 
-  return { pd, lgd, el: pd*lgd*ead, bal: ead, hr };
+// Competing-risks walk: month by month from the loan's age to maturity it either
+// defaults (q_d), prepays (q_p), or survives. A default in month m hits the
+// scheduled balance at m, so the loss integrates over the default-time
+// distribution. cif[m] = cumulative probability of default by month m.
+function compute(){
+  const hrd = partialHazard(COXD), hrp = partialHazard(COXP);
+  const age = Math.min(state.age, state.term), T = state.term;
+  let alive = 1, pd = 0, eadsum = 0;
+  const cif = new Array(T+1).fill(0);
+  for (let m=1; m<=T; m++){
+    if (m <= age){ cif[m] = 0; continue; }
+    const prev = Math.max(age, m-1);
+    const qd = Math.max(0, 1 - survAt(COXD,m,hrd)/Math.max(survAt(COXD,prev,hrd), 1e-12));
+    const qp = Math.max(0, 1 - survAt(COXP,m,hrp)/Math.max(survAt(COXP,prev,hrp), 1e-12));
+    const pdm = alive*qd;
+    pd += pdm; eadsum += pdm*schedBal(m);
+    alive *= (1-qd)*(1-qp);
+    cif[m] = pd;
+  }
+  pd = Math.min(1, pd);
+  const ead = pd > 1e-9 ? eadsum/pd : 0;   // E[balance | default]
+  return { pd, lgd: LGD_CONST, el: LGD_CONST*eadsum, bal: ead, cif };
 }
 
 function colorFor(pd){
@@ -503,14 +526,15 @@ bind('intRate','int_rate'); bind('age','age'); bind('fico','fico');
 bind('inc','annual_inc'); bind('amt','loan_amnt'); bind('dti','dti');
 
 // ── Survival chart ───────────────────────────────────────────────────────────
-function drawSurvival(hr){
+function drawSurvival(cif){
   const W=720,H=300,padL=48,padR=20,padT=16,padB=34;
-  const age=Math.min(state.age, state.term), T=state.term, Sa=survAt(age,hr);
+  const age=Math.min(state.age, state.term), T=state.term;
   // x-axis spans the whole term (0 → maturity), so the right-hand gap is gone.
   const xs=m=>padL+(m/T)*(W-padL-padR), ys=s=>padT+(1-s)*(H-padT-padB);
-  // conditional survival given the loan has reached its current age: S(t)/S(age).
-  // Flat at 100% over the months it has already survived, then declines to maturity.
-  const cond=t=>Math.min(survAt(t,hr)/Math.max(Sa,1e-9), 1);
+  // probability of NO default by month m, given alive at the current age:
+  // 1 − cumulative incidence of default. Early payoff counts as staying healthy.
+  // Flat at 100% over the months already survived, then declines to maturity.
+  const cond=m=>1 - (cif[Math.min(Math.max(0,Math.round(m)), T)] || 0);
   let svg='';
   for (let p=0;p<=1.0001;p+=0.25){ const y=ys(p);
     svg+=`<line class="gridline" x1="${padL}" y1="${y}" x2="${W-padR}" y2="${y}"/>`;
@@ -577,7 +601,7 @@ function update(){
   document.getElementById('amtVal').textContent = '$'+state.loan_amnt.toLocaleString();
   document.getElementById('dtiVal').textContent = state.dti.toFixed(1);
 
-  const { pd, lgd, el, bal, hr } = compute();
+  const { pd, lgd, el, bal, cif } = compute();
   const c = colorFor(pd);
 
   const v=document.getElementById('verdict'), vs=document.getElementById('verdictSub');
@@ -608,7 +632,7 @@ function update(){
   document.getElementById('elDetail').textContent =
     `On a $${Math.round(bal).toLocaleString()} exposure at default: ${(pd*100).toFixed(1)}% remaining-life default chance × ${(lgd*100).toFixed(0)}% loss severity.`;
 
-  drawSurvival(hr);
+  drawSurvival(cif);
 }
 
 // init
