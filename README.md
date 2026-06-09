@@ -153,6 +153,17 @@ It lets you:
 
 The dashboard uses the model payload exported by `python/04_reserve.ipynb` to `output/dashboard_model.json`. `python/05_sync_dashboard.py` embeds that payload into `index.html` so the dashboard stays tied to the latest fitted model.
 
+## Implementation Summary
+
+| Step | Main task | Tools |
+|---|---|---|
+| Ingest | Load Lending Club data, clean fields, define snapshot age, split resolved vs active loans | `pandas`, `pyarrow` |
+| Explore | Build delinquency, cohort, distribution, and correlation charts | `pandas`, `matplotlib`, `seaborn` |
+| Model default | Fit application-time default model and survival models for default/prepayment timing | `scikit-learn`, `statsmodels`, `lifelines` |
+| Model severity | Measure LGD from charged-off loans and test whether it is predictable | `pandas`, `statsmodels` |
+| Reserve | Walk each active loan forward month by month and sum expected losses | `numpy`, `pandas` |
+| Dashboard | Export fitted model values and embed them in the browser dashboard | `json`, `pathlib`, JavaScript |
+
 ## Project Layout
 
 ```text
