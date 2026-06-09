@@ -232,7 +232,7 @@
           <label>Months on book<span class="help" tabindex="0" role="note" aria-label="About months on book">?<span class="tooltip">How long the loan has already been active. The model scores its risk over the time it has left, given it has survived this far. 0 = a brand-new loan.</span></span></label>
           <span class="val" id="ageVal">0 mo</span>
         </div>
-        <input type="range" id="age" min="0" max="60" step="1" value="0">
+        <input type="range" id="age" min="0" max="36" step="1" value="0">
       </div>
 
       <div class="field">
@@ -287,7 +287,7 @@
 
       <div class="metric">
         <div class="metric-head">
-          <span class="metric-name">Exposure at default<span class="help" tabindex="0" role="note" aria-label="About exposure at default">?<span class="tooltip">Principal still owed at the loan's projected default month — the base the loss applies to. It shrinks as the loan amortises. Expected loss is ~89% of this (recovery on unsecured loans is low).</span></span></span>
+          <span class="metric-name">Exposure at default<span class="help" tabindex="0" role="note" aria-label="About exposure at default">?<span class="tooltip">Principal still owed at the loan's projected default month (scheduled amortisation) — the base the loss applies to. It shrinks as the loan ages. Expected loss is ~89% of this (recovery on unsecured loans is low).</span></span></span>
           <span class="metric-val" id="eadVal">—</span>
         </div>
         <div class="bar-track"><div class="bar-fill" id="eadBar" style="width:0%"></div></div>
@@ -295,7 +295,7 @@
       </div>
 
       <div class="el-box">
-        <div class="el-label">Expected loss = PD × LGD × outstanding balance</div>
+        <div class="el-label">Expected loss = PD × LGD × exposure at default</div>
         <div class="el-val" id="elVal">—</div>
         <div class="el-detail" id="elDetail">The amount expected to be lost on this loan over its remaining life.</div>
       </div>
@@ -321,7 +321,7 @@
     <div class="res-head">
       <div>
         <h2>The reserve for the whole active book</h2>
-        <p class="note" style="margin-bottom:0;max-width:600px;">Expected credit loss across all 0.9M loans still open ($9.5B outstanding), summed loan-by-loan. Drag the stress slider to raise every loan's default rate together — a downturn — and watch the reserve respond.</p>
+        <p class="note" style="margin-bottom:0;max-width:600px;">Expected credit loss across all 0.9M loans still open ($9.5B outstanding), summed loan-by-loan and anchored to each loan's actual outstanding balance. Pick a downturn scenario to raise every loan's default rate together and watch the reserve respond.</p>
       </div>
     </div>
 
@@ -333,12 +333,12 @@
       </div>
       <div class="res-card">
         <div class="rc-lab">Expected reserve (base)</div>
-        <div class="rc-num">$1,314M</div>
-        <div class="rc-sub">13.8% of outstanding, current conditions</div>
+        <div class="rc-num">$1,272M</div>
+        <div class="rc-sub">13.4% of outstanding, current conditions</div>
       </div>
       <div class="res-card accent">
         <div class="rc-lab">Reserve under stress</div>
-        <div class="rc-num" id="resStress">$1,314M</div>
+        <div class="rc-num" id="resStress">$1,272M</div>
         <div class="rc-sub" id="resStressSub">no stress applied</div>
       </div>
     </div>
@@ -352,32 +352,32 @@
   </div>
 
   <footer>
-    Predictions use this project's fitted models: a Cox survival model for remaining-life probability of default (conditioned on the loan's current age), a flat ~89% loss-given-default on the outstanding balance (≈11% recovery), and the scheduled amortised balance at the projected default month as exposure-at-default. The portfolio reserve is the loan-level expected credit loss across the active book; the scenario buttons scale every grade's default rate together.
+    Predictions use this project's fitted models: a Cox survival model for remaining-life probability of default (conditioned on the loan's current age), a flat ~89% loss-given-default on the outstanding balance (≈11% recovery), and the scheduled amortised balance at the projected default month as exposure-at-default. The portfolio reserve is the loan-level expected credit loss across the active book, anchored to each loan's actual outstanding balance; the scenario buttons scale every grade's default rate together.
     <div class="disclaimer">For demonstration only. Trained on unsecured consumer loans (Lending Club, 2007–2018); no macroeconomic overlay; not a substitute for a lender's own provisioning.</div>
   </footer>
 </div>
 
 <script>
 // ── Cox survival model (remaining-life PD) ───────────────────────────────────
+// Exact values printed by the export cell at the end of 04_reserve.ipynb —
+// keep in sync with the notebook if the model is refit.
 const COX = {
-  coef: { int_rate:7.645444598807875, dti:0.0011791694803998734,
-          fico:-0.0027811853454018367, annual_inc:-8.607601650165143e-7,
-          grade_num:0.12710180642491486, term:-0.0052041225410672095 },
-  means: { int_rate:0.130878155, dti:18.8425291, fico:700.65326,
-           annual_inc:77768.4806125, grade_num:2.66336, term:42.93816 },
-  base: [[0,1.0],[1,0.99871],[2,0.99697],[3,0.9955],[4,0.99262],[5,0.98869],
-    [6,0.98424],[7,0.97574],[8,0.97086],[9,0.96551],[10,0.95953],[11,0.95436],
-    [12,0.94524],[13,0.94335],[14,0.93691],[15,0.93078],[16,0.92099],[17,0.915],
-    [18,0.90829],[19,0.9025],[20,0.89707],[21,0.88734],[22,0.88128],[23,0.87471],
-    [24,0.86966],[25,0.86463],[26,0.85802],[27,0.85176],[28,0.84618],[29,0.84026],
-    [30,0.83238],[31,0.82664],[32,0.82194],[33,0.81673],[34,0.81142],[35,0.80373],
-    [36,0.79947],[37,0.79622],[38,0.79118],[39,0.78488],[40,0.7784],[41,0.77585],
-    [42,0.77069],[43,0.76716],[44,0.76342],[45,0.75901],[46,0.75398],[47,0.74996],
-    [48,0.74624],[49,0.74361],[50,0.7403],[51,0.73829],[52,0.7339],[53,0.73108],
-    [54,0.72758],[55,0.72419],[56,0.7224],[57,0.71942],[58,0.71877],[59,0.71633],
-    [60,0.7142],[61,0.7142],[62,0.71133],[63,0.68543],[64,0.63042],[65,0.57279],
-    [66,0.5375],[67,0.49328],[68,0.47022],[69,0.44716],[70,0.43006],[71,0.41296],
-    [72,0.39586]]
+  coef: { int_rate:7.705776883155778, dti:0.001529026327581638,
+          fico:-0.0028990155000504316, annual_inc:-1.010828915096618e-6,
+          grade_num:0.12058509774161612, term:-0.005068520405475906 },
+  means: { int_rate:0.13088154866666665, dti:18.884755799999997, fico:700.5909433333334,
+           annual_inc:78031.4488374, grade_num:2.663473333333333, term:42.89744 },
+  base: [[0,1.0],[1,0.99858],[2,0.99684],[3,0.99531],[4,0.99237],[5,0.98823],
+    [6,0.98386],[7,0.97513],[8,0.97023],[9,0.9648],[10,0.95877],[11,0.9535],
+    [12,0.94433],[13,0.94251],[14,0.93589],[15,0.92955],[16,0.92006],[17,0.91416],
+    [18,0.90753],[19,0.90149],[20,0.89593],[21,0.88639],[22,0.88023],[23,0.8739],
+    [24,0.86892],[25,0.86374],[26,0.85713],[27,0.85116],[28,0.84548],[29,0.83965],
+    [30,0.83176],[31,0.82608],[32,0.82111],[33,0.81624],[34,0.81117],[35,0.80383],
+    [36,0.79956],[37,0.79647],[38,0.79212],[39,0.78643],[40,0.77991],[41,0.77648],
+    [42,0.77087],[43,0.76746],[44,0.76368],[45,0.75937],[46,0.75419],[47,0.74929],
+    [48,0.74596],[49,0.74381],[50,0.73974],[51,0.73706],[52,0.7322],[53,0.72865],
+    [54,0.72495],[55,0.72157],[56,0.71902],[57,0.71672],[58,0.71618],[59,0.71369],
+    [60,0.71219]]
 };
 // LGD = loss on the outstanding balance — ~89% on unsecured loans (≈11% recovery), flat across grades
 const LGD_CONST = 0.891;
@@ -387,11 +387,11 @@ const GRADE_LETTER = {1:'A',2:'B',3:'C',4:'D',5:'E',6:'F',7:'G'};
 // Active-book ECL by grade ($M) at each downturn scenario — loan-level, from 04_reserve.ipynb
 const GLET = ['A','B','C','D','E','F','G'];
 const SCEN = [
-  { label:'Base',     mult:'current conditions',  total:1314, ecl:[99,244,417,321,155,55,22] },
-  { label:'Mild',     mult:'1.25× default rates',  total:1589, ecl:[121,295,503,389,188,67,26] },
-  { label:'Moderate', mult:'1.5× default rates',   total:1852, ecl:[143,346,589,457,218,72,27] },
-  { label:'Severe',   mult:'2× default rates',     total:2338, ecl:[187,447,760,590,250,76,28] },
-  { label:'Extreme',  mult:'2.5× default rates',   total:2767, ecl:[231,549,932,687,262,78,28] },
+  { label:'Base',     mult:'current conditions',  total:1272, ecl:[94,235,404,312,151,54,21] },
+  { label:'Mild',     mult:'1.25× default rates',  total:1534, ecl:[114,283,486,378,183,65,25] },
+  { label:'Moderate', mult:'1.5× default rates',   total:1785, ecl:[135,332,569,443,212,70,26] },
+  { label:'Severe',   mult:'2× default rates',     total:2249, ecl:[176,428,733,570,242,73,27] },
+  { label:'Extreme',  mult:'2.5× default rates',   total:2657, ecl:[217,524,897,663,253,76,27] },
 ];
 const EXPOSURE_TOTAL = 9489;     // $M
 
@@ -539,7 +539,7 @@ function drawSurvival(hr){
 // ── Portfolio reserve panel ──────────────────────────────────────────────────
 function drawECL(idx){
   const sc=SCEN[idx], ecl=sc.ecl, base=SCEN[0].ecl;
-  document.getElementById('resStress').textContent = '$'+sc.total+'M';
+  document.getElementById('resStress').textContent = '$'+sc.total.toLocaleString()+'M';
   document.getElementById('resStressSub').textContent =
     sc.mult+' · '+(sc.total/EXPOSURE_TOTAL*100).toFixed(1)+'% of exposure';
   const W=720,H=200,padL=44,padR=16,padT=14,padB=28;

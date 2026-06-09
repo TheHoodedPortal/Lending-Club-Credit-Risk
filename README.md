@@ -39,8 +39,8 @@ The crucial discipline throughout: a model used to score a loan today may only u
 | Question | Answer |
 |---|---|
 | Outstanding exposure on the active book | **$9.5B** (911k open loans) |
-| Expected credit loss on that book (the reserve) | **$1.31B** (14% of outstanding) |
-| Reserve under a severe (2×) downturn in default rates | **~$2.34B** (25%) |
+| Expected credit loss on that book (the reserve) | **$1.27B** (13.4% of outstanding) |
+| Reserve under a severe (2×) downturn in default rates | **~$2.25B** (24%) |
 | Historical 90-day delinquency rate (all loans) | 12.9% |
 | Default-model discrimination (AUC, out-of-time test) | 0.68 |
 
@@ -58,13 +58,13 @@ A loan is labelled **delinquent** if its status is `Late (31–120 days)`, `Defa
 
 ![Delinquency rate by loan grade](output/figures/delinquency_by_grade.png)
 
-The book splits into **resolved loans** (Fully Paid / Charged Off / Default — outcomes known, used to *train* the models) and **active loans** (Current / In-grace / Late — still open, the book we *reserve against*). Grouping by issue quarter shows the 2007–08 crisis clearly, and shows that recent vintages look deceptively safe because they haven't had time to go bad yet — *maturation bias*, which the forward-looking approach and the backtest both account for.
+The book splits into **resolved loans** (Fully Paid / Charged Off / Default — outcomes known, they anchor what the models learn) and **active loans** (Current / In-grace / Late — still open, the book we *reserve against*; they contribute to the survival model only as censored observations, since their outcomes aren't known yet). Grouping by issue quarter shows the 2007–08 crisis clearly, and shows that recent vintages look deceptively safe because they haven't had time to go bad yet — *maturation bias*, which the forward-looking approach and the backtest both account for.
 
 ![Delinquency by issue cohort and grade](output/figures/vintage_curves_by_grade.png)
 
 ### 2. Probability of default — and *when*
 
-**Discrimination (application-time).** A logistic regression predicts whether a loan will default using only information available at issue, trained on 2007–2017 and tested on the held-out 2018 vintage (**AUC = 0.68** — solid for consumer credit). More useful than the score is *what it learned*: each bar is the change in default probability for a one-standard-deviation increase in a factor, on a common footing. **Loan grade dominates; higher income and a better credit score are the strongest protective factors.** (Functional form was checked with binned-residual plots: nonlinear terms — a log transform of income, a quadratic in debt-to-income — were tested but didn't change the out-of-time AUC, so the model is kept linear for simplicity.)
+**Discrimination (application-time).** A logistic regression predicts whether a loan will default using only information available at issue, trained on 2007–2017 and tested on the held-out 2018 vintage (**AUC = 0.68** — solid for consumer credit; note the test vintage was young at the snapshot, so this measures how well the model ranks *early* defaults). More useful than the score is *what it learned*: each bar is the change in default probability for a one-standard-deviation increase in a factor, on a common footing. **Loan grade dominates; higher income and a better credit score are the strongest protective factors.** (Functional form was checked with binned-residual plots: nonlinear terms — a log transform of income, a quadratic in debt-to-income — were tested but didn't change the out-of-time AUC, so the model is kept linear for simplicity.)
 
 ![What drives a borrower to default](output/figures/marginal_effects.png)
 
@@ -88,11 +88,11 @@ The timing effect you might expect in severity — a seasoned loan loses less �
 
 ### 4. The forward-looking reserve
 
-Putting the pieces together on the **active book** — for every open loan, `remaining-life PD × LGD (≈89%) × exposure-at-default`, where exposure is the amortised balance projected to the loan's expected default month, summed:
+Putting the pieces together on the **active book** — for every open loan, `remaining-life PD × LGD (≈89%) × exposure-at-default`, where exposure is the loan's **actual outstanding balance today**, rolled forward along its amortisation schedule to the expected default month, summed:
 
 ![Forward-looking ECL by grade](output/figures/ecl_by_grade.png)
 
-The reserve comes to **$1.31B on $9.5B of outstanding exposure (14%)**. **Grade C drives the largest absolute share** ($417M) — not because it's the riskiest, but because there is so much of it. Concentration matters as much as rate.
+The reserve comes to **$1.27B on $9.5B of outstanding exposure (13.4%)**. **Grade C drives the largest absolute share** ($404M) — not because it's the riskiest, but because there is so much of it. Concentration matters as much as rate. One deliberate conservatism: loans already 31–120 days late are reserved in full (default treated as certain, on today's balance) — real roll rates from that bucket are high but below 100%.
 
 **A bad year is *systemic*, not random.** With ~900k loans, individual-loan default randomness diversifies away almost entirely — a Monte-Carlo over independent defaults gives a 95th percentile essentially equal to the mean. The reserve's real uncertainty is a **downturn lifting everyone's default rate at once**, so the book is stress-tested by scaling PD:
 
@@ -100,18 +100,18 @@ The reserve comes to **$1.31B on $9.5B of outstanding exposure (14%)**. **Grade 
 
 | Scenario | Reserve | % of outstanding |
 |---|---|---|
-| Base (current conditions) | $1,314M | 13.8% |
-| Mild stress (+25% PD) | $1,589M | 16.7% |
-| Moderate stress (+50% PD) | $1,852M | 19.5% |
-| Severe (2× PD) | $2,338M | 24.6% |
+| Base (current conditions) | $1,272M | 13.4% |
+| Mild stress (+25% PD) | $1,534M | 16.2% |
+| Moderate stress (+50% PD) | $1,785M | 18.8% |
+| Severe (2× PD) | $2,249M | 23.7% |
 
 ### 5. Does it hold up? A backtest
 
-The honest test: train the models on a **past slice** (loans issued ≤ 2014), then predict each vintage's lifetime loss rate and compare to what was actually realized.
+The honest test: train the models — survival *and* loss severity — on a **past slice** (loans issued ≤ 2014), then predict each vintage's lifetime loss rate and compare to what was actually realized.
 
 ![Backtest: predicted vs realized loss by vintage](output/figures/ecl_backtest.png)
 
-On **matured, normal-condition vintages (2010–2016) the prediction tracks reality** (predicted ~9–13% vs realized ~8–11%), running slightly conservative. Two gaps are expected and informative: the **2007–08 crisis** vintages are under-predicted because the model has no macro variable, and the most **recent** vintages show predicted above realized simply because those loans haven't had time to default yet. Where loans have seasoned and conditions were normal, the forward-looking reserve matches what happened — which is the validation that matters.
+On **matured, normal-condition vintages the prediction tracks reality** (predicted ~9–13% vs realized ~8–11%), running a few points conservative. The shaded ≤ 2014 years are in-sample; the matured out-of-sample check is 2015–16 (predicted 11.8% / 11.6% vs realized 11.2% / 10.8%). The consistent conservative tilt has a known cause: loans that pay off early are treated as censored, which slightly overstates default risk (see caveats). Two other gaps are expected and informative: the **2007–08 crisis** vintages are under-predicted because the model has no macro variable, and the most **recent** vintages show predicted above realized simply because those loans haven't had time to default yet. Where loans have seasoned and conditions were normal, the forward-looking reserve lands close to — and a touch above — what happened, which is the right side to miss on.
 
 ### 6. The interactive dashboard
 
@@ -152,8 +152,8 @@ On **matured, normal-condition vintages (2010–2016) the prediction tracks real
 | PD — discrimination | Logistic regression (application-time features, out-of-time test) | `scikit-learn`, `statsmodels` |
 | PD — timing | Cox proportional hazards, Kaplan-Meier → remaining-life PD | `lifelines` |
 | LGD | Loss on outstanding principal — flat ~89% (recovery ~11%); regression confirms it's unpredictable (R² < 1%) | `pandas`, `statsmodels` |
-| Exposure at default | Scheduled outstanding balance at the projected default month (amortisation) | `numpy` |
-| Reserve | Loan-level expected credit loss (PD × LGD × EAD) on the active book + PD stress + vintage backtest | `numpy` |
+| Exposure at default | Actual outstanding balance, rolled forward along the amortisation schedule to the projected default month | `numpy` |
+| Reserve | Loan-level expected credit loss (PD × LGD × EAD) on the active book (delinquent loans reserved in full) + PD stress + vintage backtest | `numpy` |
 
 ---
 
@@ -174,8 +174,9 @@ Requires Python 3.10+. The raw CSV (`accepted_2007_to_2018Q4.csv`) must be downl
 
 - **This is consumer credit data.** Lending Club loans are unsecured personal loans; the methodology transfers to other lending but the specific numbers would differ.
 - **No macroeconomic variable.** The models learn loan-level risk, not the cycle — so they under-predict crisis vintages (visible in the backtest). A production reserve would overlay a macro scenario.
+- **Early payoff is treated as censoring.** A loan that prepays leaves the data as a censored observation, which slightly overstates remaining-life default risk — the source of the backtest's few-points-conservative tilt. A competing-risks treatment (modelling prepayment and default jointly) would tighten it.
 - **Maturation.** Recent vintages haven't fully matured; the forward-looking PD projects their remaining life, and the backtest shows the gap explicitly.
-- **The reserve rests on modelling choices.** LGD is a flat ~89% (≈11% recovery) and exposure-at-default uses the scheduled amortised balance; the stress range, not a single point, is the honest output.
+- **The reserve rests on stated modelling choices.** LGD is a flat ~89% (≈11% recovery, ignoring collection costs and the time value of recoveries — so true severity is, if anything, a touch higher); exposure rolls each loan's actual balance forward on its amortisation schedule; loans already 31–120 days late are reserved in full. The stress range, not a single point, is the honest output.
 - **Models simplify reality.** Default is partly driven by unpredictable life events — which is the whole reason a reserve is needed.
 
 ---
