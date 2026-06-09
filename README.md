@@ -33,8 +33,8 @@ One discipline applies throughout: a model scoring a loan today may only use inf
 | | |
 |---|---|
 | Open loans on the book | 911,000 loans, **$9.5B** still owed |
-| Expected credit loss — the reserve | **$1.04B** (10.9% of outstanding) |
-| The same reserve if default rates double | **$1.84B** (19.4%) |
+| Expected credit loss — the reserve | **$1.02B** (10.7% of outstanding) |
+| The same reserve if default rates double | **$1.65B** (17.4%) |
 
 The reserve is model-driven and backtested: on past loan cohorts that have fully played out under normal conditions, the predicted loss rate lands within about a point of what actually happened ([section 5](#5-does-it-hold-up-a-backtest)).
 
@@ -95,7 +95,7 @@ Now everything is applied to the 911,000 open loans. Each one is walked forward,
 
 ![Forward-looking ECL by grade](output/figures/ecl_by_grade.png)
 
-**$1.04B against $9.5B outstanding — 10.9%.** Grade C carries the largest share ($332M), not because it is the riskiest grade but because there is so much of it. Concentration matters as much as rate. One deliberate conservatism: loans already 31–120 days late are reserved in full, as if default were certain. Some of those loans actually cure, so this padding leans the reserve safe.
+**$1.02B against $9.5B outstanding — 10.7%.** Grade C carries the largest share ($324M), not because it is the riskiest grade but because there is so much of it. Concentration matters as much as rate. One deliberate conservatism: loans already 31–120 days late are reserved in full, as if default were certain. Some of those loans actually cure, so this padding leans the reserve safe.
 
 **A bad year is systemic, not random.** With 900,000 loans, the luck of individual defaults averages out almost completely — simulating the book with independent defaults barely moves the 95th percentile off the mean. What actually threatens the reserve is a downturn lifting *everyone's* default rate at once. So the stress test scales default probabilities across the whole book:
 
@@ -103,10 +103,10 @@ Now everything is applied to the 911,000 open loans. Each one is walked forward,
 
 | Scenario | Reserve | % of outstanding |
 |---|---|---|
-| Base (current conditions) | $1,038M | 10.9% |
-| Mild stress (+25% PD) | $1,244M | 13.1% |
-| Moderate stress (+50% PD) | $1,448M | 15.3% |
-| Severe (2× PD) | $1,844M | 19.4% |
+| Base (current conditions) | $1,015M | 10.7% |
+| Mild stress (+25% PD) | $1,187M | 12.5% |
+| Moderate stress (+50% PD) | $1,350M | 14.2% |
+| Severe (2× PD) | $1,653M | 17.4% |
 
 ### 5. Does it hold up? A backtest
 
@@ -171,6 +171,8 @@ pip install -r python/requirements.txt
 # download the Lending Club CSV from Kaggle into data/raw/, then from the project root:
 python python/00_ingest.py
 jupyter notebook python/
+# after refitting 04_reserve.ipynb, refresh the embedded dashboard payload:
+python python/05_sync_dashboard.py
 ```
 
 Requires Python 3.10+. The raw CSV (`accepted_2007_to_2018Q4.csv`, ~1.7GB) is not tracked — download it from [Kaggle](https://www.kaggle.com/datasets/wordsforthewise/lending-club) into `data/raw/` first.

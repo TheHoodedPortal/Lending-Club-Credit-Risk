@@ -8,13 +8,17 @@ Output: data/processed/loans_clean.parquet
 """
 
 import pandas as pd
-import numpy as np
 from pathlib import Path
 
 # ── Paths ────────────────────────────────────────────────────────────────────
 RAW  = Path("data/raw/accepted_2007_to_2018Q4.csv")
 OUT  = Path("data/processed/loans_clean.parquet")
 OUT.parent.mkdir(parents=True, exist_ok=True)
+
+# Lending Club's 2018Q4 accepted-loans extract carries servicing dates through
+# March 2019. Keep this as the single as-of date used for active-loan age and
+# right-censoring; changing it should trigger a full notebook/dashboard rerun.
+SNAPSHOT_DATE = pd.Timestamp("2019-03-01")
 
 # ── Columns to keep ──────────────────────────────────────────────────────────
 COLS = [
@@ -53,7 +57,15 @@ df["last_pymnt_d"] = pd.to_datetime(df["last_pymnt_d"], format="%b-%Y",
 df["issue_year"]    = df["issue_d"].dt.year
 df["issue_quarter"] = df["issue_d"].dt.to_period("Q").astype(str)
 
-today = pd.Timestamp("2019-01-01")    # data snapshot date
+max_payment_date = df["last_pymnt_d"].max()
+if max_payment_date > SNAPSHOT_DATE:
+    raise ValueError(
+        f"last_pymnt_d extends to {max_payment_date.date()}, "
+        f"after configured SNAPSHOT_DATE={SNAPSHOT_DATE.date()}"
+    )
+
+today = SNAPSHOT_DATE
+df["snapshot_d"] = today
 df["months_obs"] = (
     (df["last_pymnt_d"].fillna(today) - df["issue_d"])
     .dt.days / 30
@@ -108,7 +120,18 @@ before = len(df)
 df = df.dropna(subset=required)
 print(f"\n  Dropped {before - len(df):,} rows | {len(df):,} remaining")
 
+# Data-quality checks for the live book. These rows are not automatically
+# dropped: zero balances naturally contribute zero ECL, and past-maturity
+# active rows are useful audit signals. Printing them makes that choice explicit.
+active = df[~df["resolved"]]
+zero_balance_active = int((active["out_prncp"] <= 0).sum())
+past_maturity_active = int((active["age"] >= active["term"]).sum())
+print("\nActive-book validation:")
+print(f"  Snapshot date: {today.date()} | latest last_pymnt_d: {max_payment_date.date()}")
+print(f"  Active rows with out_prncp <= 0: {zero_balance_active:,}")
+print(f"  Active rows at/past scheduled maturity: {past_maturity_active:,}")
+
 # ── Save ──────────────────────────────────────────────────────────────────────
 df.to_parquet(OUT, index=False)
-print(f"  Saved → {OUT}")
+print(f"  Saved -> {OUT}")
 print(f"  Final shape: {df.shape}")
