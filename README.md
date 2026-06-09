@@ -64,7 +64,7 @@ More interesting than the score is what the model learned. The chart puts every 
 
 ![What drives a borrower to default](output/figures/marginal_effects.png)
 
-**The price of risk leads.** The interest rate — the lender's own all-in pricing of the borrower — and the grade behind it carry the most signal. Higher income and a better credit score are the strongest protective factors. (Nonlinear versions of income and debt-to-income were tested and didn't improve the AUC, so the model stays linear.)
+**The price of risk leads.** The interest rate — the lender's own all-in pricing of the borrower — and the grade behind it carry the most signal. Higher income and a better credit score are the strongest protective factors. Read those top two bars together rather than as separate findings: rate and grade are about 0.95 correlated (the lender sets the rate *from* the grade), so they're really a single "price of risk" signal the regression has split across two bars — which is also why their relative heights aren't worth over-interpreting. (Nonlinear versions of income and debt-to-income were tested and didn't improve the AUC, so the model stays linear.)
 
 The 0.68 itself is worth pausing on: consumer default is only **partly predictable**, because its strongest triggers — job loss, illness, divorce — appear in no loan application. That irreducible uncertainty is the reason reserves exist.
 
