@@ -2,9 +2,9 @@
 
 How much should a lender set aside today for losses on loans that are still open?
 
-This project estimates that reserve for Lending Club's 2007-2018 consumer-loan book. It cleans 2.26 million loans, learns from loans that have already resolved, then scores the 911,000 loans still open as of the March 2019 servicing snapshot.
+This project estimates that reserve for Lending Club's 2007-2018 consumer-loan book. It cleans 2.26 million loans, uses resolved outcomes and censored active loans to fit the survival models, then scores the 911,000 loans still open as of the March 2019 servicing snapshot.
 
-The result is a loan-level expected credit loss model, a backtest by vintage, and a single-file browser dashboard.
+The result is a loan-level expected credit loss model, stress scenarios, and a single-file browser dashboard.
 
 [Try the live dashboard](https://thehoodedportal.github.io/Lending-Club-Credit-Risk/)
 
@@ -14,10 +14,10 @@ The result is a loan-level expected credit loss model, a backtest by vintage, an
 |---|---:|
 | Open loans | 911,000 |
 | Outstanding principal | $9.5B |
-| Base expected credit loss | $1.02B |
-| Base reserve rate | 10.7% of outstanding |
-| Reserve if default rates double | $1.65B |
-| Stressed reserve rate | 17.4% of outstanding |
+| Base expected credit loss | $950M |
+| Base reserve rate | 10.0% of outstanding |
+| Reserve if default rates double | $1.55B |
+| Stressed reserve rate | 16.3% of outstanding |
 
 The base reserve is not a worst-case number. It is the model's current-condition estimate. The stress range is more useful for planning because consumer credit losses move together in downturns.
 
@@ -37,7 +37,7 @@ That means each open loan needs three estimates:
 | Loss given default (LGD) | Share of the outstanding balance lost after default | Observed average loss on charged-off loans |
 | Exposure at default (EAD) | Balance expected to remain if default occurs | Actual current balance rolled forward on the amortization schedule |
 
-The key rule is that a loan is scored only with information available at the scoring date. Outcomes are used to train and validate the model, not as predictors for open loans.
+The key rule is that a loan is scored only with information available at the scoring date. Outcomes are used to train the model, not as predictors for open loans. The estimate has not been independently calibrated.
 
 ## Data Setup
 
@@ -50,14 +50,14 @@ A loan is treated as seriously delinquent if its status is:
 - `Charged Off`
 - `Does not meet the credit policy. Status:Charged Off`
 
-By that definition, 12.9% of all loans become delinquent. Risk rises sharply by Lending Club grade, from Grade A to Grade G.
+By that snapshot-status definition, 12.9% of all loans are classified as delinquent or defaulted; this is not a complete history of delinquency. Risk rises sharply by Lending Club grade, from Grade A to Grade G.
 
 ![Delinquency rate by loan grade](output/figures/delinquency_by_grade.png)
 
 The data is split into two working groups:
 
-- **Resolved loans:** fully paid, charged off, or defaulted loans with known outcomes. These form the training history.
-- **Active loans:** current, grace-period, or late loans still open at the snapshot. These are the loans being reserved against.
+- **Resolved loans:** fully paid, charged off, or defaulted loans with known outcomes. These contribute observed outcomes to the training history.
+- **Active loans:** current, grace-period, or late loans still open at the snapshot. These are right-censored for training and reserved against.
 
 Recent loans can look artificially safe because they have not had enough time to fail. The model handles that by using survival analysis rather than treating every current loan as permanently good.
 
@@ -67,15 +67,17 @@ Recent loans can look artificially safe because they have not had enough time to
 
 The project uses two views of default risk.
 
-First, a logistic regression explains which application-time features separate safer borrowers from riskier borrowers. It is trained only on matured loans, so each training label is a final outcome rather than a loan that is merely current so far. The out-of-time AUC on the matured 2015 cohort is 0.68.
+First, a logistic regression explains which application-time features separate safer borrowers from riskier borrowers. It is trained only on matured loans, although snapshot statuses can still miss earlier delinquency and do not guarantee final outcomes for loans that remain open. The out-of-time AUC on the matured 2015 cohort, predominantly 36-month loans, is 0.68.
 
 ![What drives a borrower to default](output/figures/marginal_effects.png)
 
 The strongest signals are the lender's own pricing and grade, followed by borrower income and credit score. Interest rate and grade should be read together: they are highly correlated because the rate is largely set from the grade.
 
-Second, the reserve needs timing, not just a lifetime yes/no probability. A Cox survival model estimates month-by-month default risk. A second Cox model estimates early payoff, because a loan that prepays can no longer default. The reserve walks both hazards forward together as competing risks.
+Second, the reserve needs timing, not just a lifetime yes/no probability. A Cox survival model estimates month-by-month default risk. Separate Cox models for 36- and 60-month terms estimate early payoff, because a loan that prepays can no longer default. The reserve walks both hazards forward together as competing risks.
 
 ![Survival curves by grade](output/figures/kaplan_meier_by_grade.png)
+
+The exploratory chart uses charge-off/default as the event and the same unvalidated timing proxy described below.
 
 This lets the model score a loan from where it is today. A loan that has already survived 20 months is not treated like a brand-new loan; the model prices only the remaining term.
 
@@ -107,9 +109,9 @@ If default happens in a month, the loss is the LGD multiplied by the balance exp
 
 ![Forward-looking ECL by grade](output/figures/ecl_by_grade.png)
 
-Base result: **$1.02B** expected credit loss on **$9.5B** outstanding, or **10.7%** of the active book. Grade C contributes the largest dollar loss because it has the most outstanding balance, not because it is the riskiest grade.
+Base result: **$950M** expected credit loss on **$9.5B** outstanding, or **10.0%** of the active book. Grade C contributes the largest dollar loss because it has the most outstanding balance, not because it is the riskiest grade.
 
-Loans already `Late (31-120 days)` are reserved in full as a conservative assumption.
+Loans already `Late (31-120 days)`, and active loans with a positive balance at or past maturity, are reserved in full as a conservative assumption.
 
 ## Stress Scenarios
 
@@ -119,23 +121,17 @@ The stress test scales monthly default probabilities inside the competing-risk w
 
 | Scenario | Reserve | % of outstanding |
 |---|---:|---:|
-| Base | $1,015M | 10.7% |
-| Mild stress (+25% default risk) | $1,187M | 12.5% |
-| Moderate stress (+50% default risk) | $1,350M | 14.2% |
-| Severe stress (2x default risk) | $1,653M | 17.4% |
-| Extreme stress (2.5x default risk) | $1,930M | 20.3% |
+| Base | $950M | 10.0% |
+| Mild stress (+25% default risk) | $1,110M | 11.7% |
+| Moderate stress (+50% default risk) | $1,263M | 13.3% |
+| Severe stress (2x default risk) | $1,550M | 16.3% |
+| Extreme stress (2.5x default risk) | $1,813M | 19.1% |
 
 With roughly 900,000 loans, individual borrower randomness mostly diversifies away. The bigger risk is systemic: an economy-wide shock that lifts default rates across the book at the same time.
 
-## Backtest
+## Backtest limitations
 
-The backtest refits the survival models and LGD using only loans issued through 2014. It then predicts lifetime loss rates by issue year and compares those predictions with realized losses.
-
-![Backtest: predicted vs realized loss by vintage](output/figures/ecl_backtest.png)
-
-The model is reasonably calibrated in normal, fully seasoned years. The 2010-2014 cohorts are within about one percentage point of realized losses. It underpredicts the 2007-2008 crisis cohorts because there is no macroeconomic input, and it modestly underpredicts 2015-2016, when loan performance worsened beyond what the application fields suggested.
-
-That is the central lesson of the backtest: loan-level features can estimate normal-condition losses, but stress overlays are needed for the credit cycle and underwriting shifts.
+The earlier vintage comparison used outcomes observed through 2019 to train on loans issued through 2014. It therefore contained future information and is not a valid historical backtest. A proper out-of-time test requires dated servicing snapshots and recovery histories, which are not available in this dataset. The reserve is a model estimate, not an independently validated result.
 
 ## Interactive Dashboard
 
@@ -180,7 +176,7 @@ The dashboard uses the model payload exported by `python/04_reserve.ipynb` to `o
 │   ├── 01_eda.ipynb                 # exploratory charts
 │   ├── 02_cohort.ipynb              # vintage and cohort analysis
 │   ├── 03_models.ipynb              # default drivers, survival, LGD
-│   ├── 04_reserve.ipynb             # reserve, stress scenarios, backtest, export
+│   ├── 04_reserve.ipynb             # reserve, stress scenarios, export
 │   ├── 05_sync_dashboard.py         # embed dashboard_model.json into index.html
 │   └── requirements.txt
 └── README.md
@@ -213,15 +209,19 @@ Run the notebooks in order. After rerunning `04_reserve.ipynb`, refresh the dash
 python python/05_sync_dashboard.py
 ```
 
+The validation run used a [public mirror](https://huggingface.co/datasets/codesignal/lending-club-loan-accepted/blob/main/accepted_2007_to_2018Q4.csv) of the CSV (SHA-256 `3eae03c28fd9d2e8a076ebeb73507e8d4d0f44d90500decdb0936e0933d1f36a`). Run the synthetic checks with `python -m unittest discover -s tests -v`.
+
 The raw CSV is about 1.7GB and is not tracked. The cleaned parquet is generated by `00_ingest.py` and is also not tracked.
 
 ## Caveats
 
+- Charge-off dates are unavailable; last payment is an unvalidated timing proxy and can precede charge-off. Missing event-time proxies are excluded from survival fitting.
+- Payoffs in the final contractual month are treated as maturity; the dates have monthly precision.
 - The data is from one unsecured consumer lender. The method transfers better than the exact numbers.
 - There is no macroeconomic forecast. The stress scenarios stand in for recession or cycle effects.
 - There is no explicit vintage-quality variable. If a cohort is underwritten worse than its application fields imply, the model can miss that.
 - LGD is held flat at about 89%. This is supported by the data, but it ignores collection costs and the time value of recoveries.
-- Loans already `Late (31-120 days)` are reserved in full. That is conservative because some late loans cure.
+- Loans already `Late (31-120 days)` and active loans past maturity with positive balances are reserved in full. These are conservative assumptions, not calibrated probabilities.
 - The result should be read as a reserve range, not a single certain number.
 
 ## Data Source

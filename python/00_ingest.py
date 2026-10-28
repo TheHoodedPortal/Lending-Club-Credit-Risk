@@ -9,6 +9,7 @@ Output: data/processed/loans_clean.parquet
 
 import pandas as pd
 from pathlib import Path
+from survival_data import add_survival_events
 
 # ── Paths ────────────────────────────────────────────────────────────────────
 RAW  = Path("data/raw/accepted_2007_to_2018Q4.csv")
@@ -66,15 +67,12 @@ if max_payment_date > SNAPSHOT_DATE:
 
 today = SNAPSHOT_DATE
 df["snapshot_d"] = today
-df["months_obs"] = (
-    (df["last_pymnt_d"].fillna(today) - df["issue_d"])
-    .dt.days / 30
-).clip(lower=0).round(1)
+missing_event_times = add_survival_events(df, today)
+print(f"  Resolved loans without valid event-time proxy: {missing_event_times:,}")
 
 # ── Loan age at the snapshot ──────────────────────────────────────────────────
 # Calendar months the loan has been on the books as of the snapshot, regardless
-# of payment status. Unlike months_obs (issue → last payment, i.e. ≈ time-to-
-# default for bad loans), `age` is known for every live loan today and is the
+# of payment status. Unlike months_obs (event-time proxy or snapshot), `age` is known for every live loan today and is the
 # left-truncation point for the forward-looking survival / ECL model.
 df["age"] = ((today - df["issue_d"]).dt.days / 30).clip(lower=0).round(1)
 
