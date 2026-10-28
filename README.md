@@ -178,7 +178,9 @@ The dashboard uses the model payload exported by `python/04_reserve.ipynb` to `o
 │   ├── 03_models.ipynb              # default drivers, survival, LGD
 │   ├── 04_reserve.ipynb             # reserve, stress scenarios, export
 │   ├── 05_sync_dashboard.py         # embed dashboard_model.json into index.html
+│   ├── survival_data.py             # construct censored survival events
 │   └── requirements.txt
+├── tests/                           # event, reserve, and dashboard checks
 └── README.md
 ```
 
